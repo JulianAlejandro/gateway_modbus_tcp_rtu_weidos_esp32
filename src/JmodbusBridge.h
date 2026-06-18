@@ -63,6 +63,7 @@ struct modbusTCPResponseStruct {
 
 bool loadModbusRTUReqBuf(const byte tcp_request[SIZE_MB_TCP_REQUEST], byte* result_mb_request);
 
+//Aux function
 void showInfoModbusTCPReq(const byte tcp_request[SIZE_MB_TCP_REQUEST]); 
 void showInfoModbusRTUReq(const byte rtu_request[SIZE_MB_RTU_REQUEST]); 
 
