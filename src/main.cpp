@@ -11,6 +11,12 @@ uint16_t modbusPort = 502;
 ModbusRTUModule slaveRtuModule(BAUDRATE);
 ModbusTCPModule MasterTcpModule(modbusPort, &slaveRtuModule);
 
+void checkTCPReqCallback(const modbusTCPStruct& req) { // este callback se ejecuta solo cuando se ha recibido una peticion modbus TCP y queremos informacion 
+    if (req.slaveID == 1 && req.address == 0 && req.quantity == 2) { // por ejemplo
+        Serial.println("efectuamos una accion");  
+    }
+}
+
 void setup() {
   Serial.begin(115200);
   while(!Serial){}
@@ -21,6 +27,8 @@ void setup() {
   } else {
     Serial.println("RTU listo.");
   }
+
+  MasterTcpModule.setInterceptor(checkTCPReqCallback); 
 
   MasterTcpModule.begin(mac, ip);
   Serial.println("TCP listo."); 

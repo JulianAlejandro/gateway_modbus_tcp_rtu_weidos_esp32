@@ -6,6 +6,10 @@
 ModbusTCPModule::ModbusTCPModule(uint16_t port, ModbusRTUModule* rtuModule) 
     : _port(port), _server(port), _rtu(rtuModule) {}
 
+void ModbusTCPModule::setInterceptor(ModbusInterceptorCallback callback){
+    _interceptor = callback; 
+}
+
 void ModbusTCPModule::begin(byte mac[], IPAddress ip) {
     Ethernet.init(ETHERNET_CS);
     Ethernet.begin(mac, ip);
@@ -33,13 +37,16 @@ void ModbusTCPModule::handleClient(EthernetClient& client) {
 
             modbusTCPStruct req;
             if (parseTCPBufferToStruct(_tcpRequestBuffer, &req)) {
-                // Delegamos la lectura física al módulo RTU
+                           
+                _interceptor(req); // se ejecuta el callback para que externamente se tenga informacion (pinchar); 
+                
+                // Delegamos la lectura física al módulo RTU, se prosigue el flujo de ejecucion. 
                 if (_rtu->readFromSlave(req)) {
-                    Serial.println("[ÉXITO] Datos del esclavo obtenidos por RTU. Respondiendo por TCP...");
+                    //Serial.println("[ÉXITO] Datos del esclavo obtenidos por RTU. Respondiendo por TCP...");
                     sendTCPResponse(client, req);
                 } else {
-                    Serial.print("[ERROR] Falló la lectura RTU. Código: ");
-                    Serial.println(_rtu->getLastError());
+                    //Serial.print("[ERROR] Falló la lectura RTU. Código: ");
+                    //Serial.println(_rtu->getLastError());
                 }
             }
         }
