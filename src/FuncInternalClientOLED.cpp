@@ -1,98 +1,118 @@
 #include "FuncInternalClientOLED.h"
 
-U8G2 *u8g2;
+// Instanciamos el objeto físico u8g2 usando el constructor cooperativo de página (_1_)
+U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C u8g2Instance(U8G2_R0, U8X8_PIN_NONE);
+U8G2 *u8g2 = &u8g2Instance;
 
+// Máquina de estados privada del archivo
+enum DisplayState {
+  OLED_IDLE,
+  START_RENDER,
+  RENDERING_PAGES
+};
 
+static DisplayState displayState = OLED_IDLE;
+static unsigned long lastChange = 0;
+static uint8_t currentIdx = 0;
+
+// Caché de texto local para no usar strings pesadas dentro del bucle de pintado
+static char cachedLine1[20];
+static char cachedLine2[40];
 
 void initOLED() {
-
-  /*
-  // Mantenemos el constructor de alta velocidad para la pasarela
-  u8g2 = new U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C(U8G2_R0, U8X8_PIN_NONE);
-  u8g2->setBusClock(400000); 
+  u8g2->setBusClock(400000); // 400 Khz alta velocidad I2C
   u8g2->begin();
 
-  //Wire.setTimeout(2); 
-
-  // ──> CORRECCIÓN CRÍTICA DEL LOGO:
-  // Envolvemos el dibujo en un bucle 'do-while' de páginas.
-  // Esto obliga a la pantalla a procesar las 4 franjas de 8px del logo.
+  // Bucle cooperativo para pintar el logo sin congelar la pantalla
   u8g2->firstPage();
   do {
-    // Llamamos a tu función de librería, pero ahora se ejecutará cooperativamente 
-    // por cada franja de la pantalla, completando el logotipo de EMASESA.
     showLogo2LinesLeft(*u8g2, emasesa_icon, "EMASESA", "Calidad del agua");
   } while (u8g2->nextPage());
 
   delay(1500); 
-  
-  */
-
-    // Crear el objeto U8G2 según tu hardware (ajusta si es necesario)
-  u8g2 = new U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C(U8G2_R0, U8X8_PIN_NONE);
-  u8g2->begin();
-  
-  // Pantalla de inicio con logo
-  showLogo2LinesLeft(*u8g2, emasesa_icon, "EMASESA", "Calidad del agua");
-  delay(1500);
 }
 
-
-
-void drawOLEAD(const char* name, float value, const char* unit) {
-
-  char line1[20]; 
-  char line2[40]; 
-
-  strncpy(line1, name, sizeof(line1) - 1);
-  line1[sizeof(line1) - 1] = '\0';
-
-  String valStr = String(value, 2);
-  snprintf(line2, sizeof(line2), " %s %s", valStr.c_str(), unit);
-
-  // Mostrar en la pantalla física
-  show2LinesFull(*u8g2, line1, line2);
-}
-
-/*
-// ---------------------------------------------------------
-// Dibuja pantalla actual (llamada por updateOLEAD)
-// ---------------------------------------------------------
-void drawOLEAD(byte idx) {
-  char line1[20];
-  char line2[40];  
+// Función interna auxiliar para preparar los textos evaluando la telemetría
+static void prepareTextData(uint8_t idx) {
   unsigned long now = millis();
   
-  // Línea 1: Nombre del esclavo
-  strcpy(line1, slaveConfig[idx].name);
-  
-  // Línea 2: Evaluación del estado real del dato
-  if (slaveDisabled[idx]) {
-    strcpy(line2, "OFFLINE");
-  } else if (slaveLastUpdate[idx] == 0) {
-    strcpy(line2, "unknown");
-  } else {
-    // Convertimos el valor flotante a string según sus decimales configurados
-    String valStr = String(slaveData[idx], slaveConfig[idx].n_dec);  
+  float currentVal = 0.0;
+  unsigned long currentLastUpload = 0;
+  bool isDisabled = false;
+  bool isNewData = false;
+
+  // Extracción ultrarrápida protegiendo la memoria con el Mutex global
+  if (xModbusDataMutex != NULL && xSemaphoreTake(xModbusDataMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+    currentVal = slaves[idx].convertedData;
+    currentLastUpload = slaves[idx].lastUpload;
+    isDisabled = slaves[idx].disable;
+    isNewData = slaves[idx].isNew;
     
-    if ((now - slaveLastUpdate[idx]) > STALE_TIMEOUT) {
-      // ESTADO 1: El tiempo ha expirado sin actualizaciones -> STALE [Dato] [Unidad]
-      snprintf(line2, sizeof(line2), "Stale %s %s", valStr.c_str(), slaveConfig[idx].units);
+    if (isNewData) {
+      slaves[idx].isNew = false; // Consumimos la bandera de dato fresco
+    }
+    xSemaphoreGive(xModbusDataMutex);
+  }
+
+  // Formatear Línea 1 (Nombre del Dispositivo)
+  strncpy(cachedLine1, slaves[idx].name, sizeof(cachedLine1) - 1);
+  cachedLine1[sizeof(cachedLine1) - 1] = '\0';
+  
+  // Formatear Línea 2 (Estado o Medición)
+  if (isDisabled) {
+    strcpy(cachedLine2, "OFFLINE");
+  } else if (currentLastUpload == 0) {
+    strcpy(cachedLine2, "unknown");
+  } else {
+    String valStr = String(currentVal, 2); 
+    
+    if ((now - currentLastUpload) > STALE_TIMEOUT) {
+      snprintf(cachedLine2, sizeof(cachedLine2), "Stale %s %s", valStr.c_str(), slaves[idx].unit);
     } 
-    else if (slaveIsNew[idx]) {
-      // ESTADO 2: El dato acaba de entrar en este ciclo -> NEW [Dato] [Unidad]
-      snprintf(line2, sizeof(line2), "new %s %s", valStr.c_str(), slaveConfig[idx].units);
-      
-      // CRÍTICO: Una vez mostrado una vez en pantalla, deja de ser "nuevo"
-      slaveIsNew[idx] = false; 
+    else if (isNewData) {
+      snprintf(cachedLine2, sizeof(cachedLine2), "->%s %s", valStr.c_str(), slaves[idx].unit);
     } 
     else {
-      // ESTADO 3: El dato es válido pero es el mismo de antes -> [Dato] [Unidad] (Sin prefijos)
-      snprintf(line2, sizeof(line2), "%s %s", valStr.c_str(), slaveConfig[idx].units);
+      snprintf(cachedLine2, sizeof(cachedLine2), "%s %s", valStr.c_str(), slaves[idx].unit);
     }
   }
-  
-  // Mostrar en la pantalla física
-  show2LinesFull(*u8g2, line1, line2);
 }
-*/
+
+void updateOLED() { 
+  unsigned long now = millis();
+  
+  switch (displayState) {
+    case OLED_IDLE:
+      if (now - lastChange >= DISPLAY_INTERVAL) {
+        lastChange = now;
+        
+        // Operación atómica de strings
+        prepareTextData(currentIdx);
+        
+        displayState = START_RENDER;
+      }
+      break;
+      
+    case START_RENDER:
+      u8g2->firstPage();
+      displayState = RENDERING_PAGES;
+      break;
+      
+    case RENDERING_PAGES:
+      // Dibujamos usando la caché de texto precalculada
+      u8g2->setFont(u8g2_font_9x15_tr); 
+      u8g2->drawStr(0, 15, cachedLine1);    
+
+      u8g2->setFont(u8g2_font_9x15_tr);
+      u8g2->drawStr(0, 31, cachedLine2);    
+
+      // Transfiere solo una franja de la pantalla a la vez (~1.5ms)
+      if (u8g2->nextPage() == 0) {
+        displayState = OLED_IDLE;
+        
+        // Rotamos al siguiente esclavo del carrusel
+        currentIdx = (currentIdx + 1) % NUM_SLAVES;
+      }
+      break;
+  }
+}
