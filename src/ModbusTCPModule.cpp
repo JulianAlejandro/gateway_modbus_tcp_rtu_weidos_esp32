@@ -3,7 +3,7 @@
 #include "ModbusTCPModule.h"
 
 
-ModbusTCPModule::ModbusTCPModule(uint16_t port, ModbusRTUModule* rtuModule) 
+ModbusTCPModule::ModbusTCPModule(uint16_t port, ModbusRTUModule* rtuModule ) 
     : _port(port), _server(port), _rtu(rtuModule) {}
 
 void ModbusTCPModule::setInterceptor(ModbusInterceptorCallback callback){
@@ -16,6 +16,10 @@ void ModbusTCPModule::begin(byte mac[], IPAddress ip) {
     _server.begin(_port);
 }
 
+void ModbusTCPModule::setHardwareMutex(SemaphoreHandle_t rtuMutex) {
+    _rtuMutex = rtuMutex; // Guardamos el candado real para usarlo en handleClient
+}
+
 void ModbusTCPModule::process() {
     EthernetClient client = _server.available();
     if (client) {
@@ -24,12 +28,11 @@ void ModbusTCPModule::process() {
     }
 }
 
+
 void ModbusTCPModule::handleClient(EthernetClient& client) {
     while (client.connected()) {
         if (client.available()) {
             int index = 0;
-            
-            // Leer la ráfaga TCP entrante
             while (client.available() && index < SIZE_MB_TCP_REQUEST) {
                 _tcpRequestBuffer[index++] = client.read();
                 delayMicroseconds(100);
@@ -37,20 +40,21 @@ void ModbusTCPModule::handleClient(EthernetClient& client) {
 
             modbusTCPStruct req;
             if (parseTCPBufferToStruct(_tcpRequestBuffer, &req)) {
-                           
-                _interceptor(req); // se ejecuta el callback para que externamente se tenga informacion (pinchar); 
                 
-                // Delegamos la lectura física al módulo RTU, se prosigue el flujo de ejecucion. 
-                if (_rtu->readFromSlave(req)) {
-                    //Serial.println("[ÉXITO] Datos del esclavo obtenidos por RTU. Respondiendo por TCP...");
-                    sendTCPResponse(client, req);
-                } else {
-                    //Serial.print("[ERROR] Falló la lectura RTU. Código: ");
-                    //Serial.println(_rtu->getLastError());
+                // Usamos nuestro mutex interno inyectado de forma segura
+                if (xSemaphoreTake(_rtuMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+                    
+                    if (_rtu->readFromSlave(req)) {
+                        sendTCPResponse(client, req);
+                    }else{
+                        // TODO
+                    }
+                    
+                    xSemaphoreGive(_rtuMutex);
                 }
             }
         }
-        yield(); // Cuidado de watchdog en ESP32
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
@@ -74,6 +78,11 @@ void ModbusTCPModule::sendTCPResponse(EthernetClient& client, const modbusTCPStr
     // Volcar los registros leídos al vuelo desde el módulo RTU hacia el socket TCP
     for (int i = 0; i < req.quantity; i++) {
         uint16_t valorRegistro = (uint16_t)_rtu->readRegister();
+
+        if(_interceptor != nullptr){
+            _interceptor(req, i, valorRegistro); 
+        }
+
         client.write(highByte(valorRegistro));
         client.write(lowByte(valorRegistro));
     }
