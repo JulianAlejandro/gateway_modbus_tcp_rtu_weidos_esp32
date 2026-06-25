@@ -34,21 +34,23 @@ void initOLED() {
 
 // Función interna auxiliar para preparar los textos evaluando la telemetría
 static void prepareTextData(uint8_t idx) {
-  unsigned long now = millis();
+  //unsigned long now = millis();
   
   float currentVal = 0.0;
   int decimals = 0; 
   unsigned long currentLastUpload = 0;
-  bool isDisabled = false;
+  //bool isDisabled = false;
   bool isNewData = false;
+  uint16_t errCount = 0; 
 
   // Extracción ultrarrápida protegiendo la memoria con el Mutex global
   if (xModbusDataMutex != NULL && xSemaphoreTake(xModbusDataMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
     currentVal = slaves[idx].convertedData;
     decimals = slaves[idx].decimals; 
-    currentLastUpload = slaves[idx].lastUpload;
-    isDisabled = slaves[idx].disable;
+    currentLastUpload = slaves[idx].lastTimeReference;
+    //isDisabled = slaves[idx].disable;
     isNewData = slaves[idx].isNew;
+    errCount = slaves[idx].errCounter; 
     
     if (isNewData) {
       slaves[idx].isNew = false; // Consumimos la bandera de dato fresco
@@ -61,14 +63,14 @@ static void prepareTextData(uint8_t idx) {
   cachedLine1[sizeof(cachedLine1) - 1] = '\0';
   
   // Formatear Línea 2 (Estado o Medición)
-  if (isDisabled) {
+  if (errCount >= 5) {
     strcpy(cachedLine2, "OFFLINE");
   } else if (currentLastUpload == 0) {
     strcpy(cachedLine2, "unknown");
   } else {
     String valStr = String(currentVal, decimals); 
     
-    if ((now - currentLastUpload) > STALE_TIMEOUT) {
+    if (1 < errCount && errCount < 5 ) {
       snprintf(cachedLine2, sizeof(cachedLine2), "Stale %s %s", valStr.c_str(), slaves[idx].unit);
     } 
     else if (isNewData) {

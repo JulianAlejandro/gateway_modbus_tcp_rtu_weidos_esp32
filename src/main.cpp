@@ -20,20 +20,21 @@ SemaphoreHandle_t xModbusRTUMutex = NULL;
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
   //                          constants                             |                         control variables 
-  // name     unit  decimals  salveId adress  quantity functionCode | dataRaw  convertedData  flagUpdate  lastUpload   disable  isNew  
-    { "CL2",  "ppm",  3,        1,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,        false,  false},
-    { "COND", "us",   1,        2,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,        false,  false},
-    { "REDOX","mV",   1,        3,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,        false,  false},
-    { "TURB", "NTU",  3,        4,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,        false,  false},
-    { "PH",   "pH",   2,        5,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,        false,  false}
+  // name     unit  decimals  salveId adress  quantity functionCode | dataRaw  convertedData  flagUpdate  lastTimeRef    isNew  errCounter 
+    { "CL2",  "ppm",  3,        1,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,          false,    0},
+    { "COND", "us",   1,        2,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,          false,    0},
+    { "REDOX","mV",   1,        3,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,          false,    0},
+    { "TURB", "NTU",  3,        4,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,          false,    0},
+    { "PH",   "pH",   2,        5,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,          false,    0}
 };
 
 
 const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
+//unsigned long lastTimeReference = 0; 
 
 void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
-void reqSlaveInternalClient(ModbusSlaveData* slave);  
+bool reqSlaveInternalClient(ModbusSlaveData* slave);  
 
 void checkTCPReqCallback(const modbusTCPStruct& req, uint16_t index, uint16_t value) {
     for (uint8_t i = 0; i < NUM_SLAVES; i++) {
@@ -70,12 +71,7 @@ void setup() {
   MasterTcpModule.setHardwareMutex(xModbusRTUMutex);
   MasterTcpModule.setInterceptor(checkTCPReqCallback); 
   MasterTcpModule.begin(mac, ip);
-/*
-  unsigned long currentMillis = millis();
-  for(uint8_t i = 0; i < NUM_SLAVES; i++){
-      slaves[i].lastUpload = currentMillis;
-  }
-*/
+
   xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
 
   initOLED(); // Inicialización modular
@@ -102,15 +98,23 @@ void checkSlaveFlagsAndTimeouts() {
       updateSlave(&slaves[i]); 
     }
 
-    // 2. LECTURA FORZADA SI EL ESCLAVO NO REPORTA EN 30s
-    if (!slaves[i].disable && (now - slaves[i].lastUpload > INTERNAL_POLL_THRESHOLD)) { // SI ESTA DISABLE NO ENTRA? MAL
-      reqSlaveInternalClient(&slaves[i]);
+    // 2. LECTURA FORZADA SI EL ESCLAVO NO REPORTA EN 30s y cada 30 segundos
+    if (now - slaves[i].lastTimeReference > INTERNAL_POLL_THRESHOLD) {  // ESTO ESTA MAL PORQUE SI 
+      //lastTimeReference = now;   
+      if(!reqSlaveInternalClient(&slaves[i])){
+          slaves[i].errCounter++; 
+          slaves[i].lastTimeReference = now; 
+          if(slaves[i].errCounter >= 5){ // en 30 * 5 = en 2 minutos y medio no hay respuestas...disable.
+              slaves[i].errCounter = 5;  
+          }
+        }
     }
+
   }
 }
 
 void updateSlave(ModbusSlaveData* slave){
-  //updateSlave(ModbusSlaveData* slave); 
+  
   if (xSemaphoreTake(xModbusDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
     if (slave->flagUpdate) {
 
@@ -118,18 +122,19 @@ void updateSlave(ModbusSlaveData* slave){
       slave->rawBuffer[0] = 0; // inicilizado de nuevo. por si acaso, listo para ser sobrescrito
       slave->rawBuffer[1] = 0; 
       slave->convertedData = combinado / 1000.0;
-      slave->lastUpload = millis(); 
+      slave->lastTimeReference = millis(); 
               
       slave->flagUpdate = false; // se inicializa para que no este entrando en este bucle eternamente. 
       slave->isNew = true; // Activa el aviso de "flecha" en pantalla temporalmente
-      slave->disable = false; // Si responde por TCP, lógicamente está ONLINE
+      //slave->disable = false; // Si responde por TCP, lógicamente está ONLINE
+      slave->errCounter = 0; 
     }
     xSemaphoreGive(xModbusDataMutex);
   }
 }
 
 
-void reqSlaveInternalClient(ModbusSlaveData* slave){ // todo quitar el now
+bool reqSlaveInternalClient(ModbusSlaveData* slave){ // todo quitar el now
 
   // se construye una request
   modbusTCPStruct req; 
@@ -163,4 +168,6 @@ void reqSlaveInternalClient(ModbusSlaveData* slave){ // todo quitar el now
       xSemaphoreGive(xModbusDataMutex);
     }
   } 
+
+  return lecturaExitosa; 
 }

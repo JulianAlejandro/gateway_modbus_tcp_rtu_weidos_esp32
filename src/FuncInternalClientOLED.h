@@ -20,15 +20,16 @@ struct ModbusSlaveData {
     const uint8_t slaveID; 
     const uint16_t address;
     const uint16_t quantity;
-    const uint8_t functionCode; 
+    const uint8_t functionCode;
 
 //variables    
     uint16_t rawBuffer[2];
     float convertedData;
     volatile bool flagUpdate;
-    unsigned long lastUpload;
-    bool disable; 
+    unsigned long lastTimeReference;
+   // bool disable; 
     bool isNew; 
+    uint16_t errCounter; 
     
 };
 

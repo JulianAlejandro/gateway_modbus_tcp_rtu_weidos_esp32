@@ -9,7 +9,7 @@ ModbusRTUModule::ModbusRTUModule(uint32_t baudrate) : _baudrate(baudrate) {}
 bool ModbusRTUModule::begin() {
     // Configuración de los pines RS485 nativos de la placa Weidmüller
     RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
-    
+   // ModbusRTUClient.setTimeout(150);
     return ModbusRTUClient.begin(_baudrate, (uint16_t)SERIAL_8N1);
 }
 
