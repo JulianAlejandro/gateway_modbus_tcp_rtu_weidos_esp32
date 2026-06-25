@@ -37,6 +37,7 @@ static void prepareTextData(uint8_t idx) {
   unsigned long now = millis();
   
   float currentVal = 0.0;
+  int decimals = 0; 
   unsigned long currentLastUpload = 0;
   bool isDisabled = false;
   bool isNewData = false;
@@ -44,6 +45,7 @@ static void prepareTextData(uint8_t idx) {
   // Extracción ultrarrápida protegiendo la memoria con el Mutex global
   if (xModbusDataMutex != NULL && xSemaphoreTake(xModbusDataMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
     currentVal = slaves[idx].convertedData;
+    decimals = slaves[idx].decimals; 
     currentLastUpload = slaves[idx].lastUpload;
     isDisabled = slaves[idx].disable;
     isNewData = slaves[idx].isNew;
@@ -64,7 +66,7 @@ static void prepareTextData(uint8_t idx) {
   } else if (currentLastUpload == 0) {
     strcpy(cachedLine2, "unknown");
   } else {
-    String valStr = String(currentVal, 2); 
+    String valStr = String(currentVal, decimals); 
     
     if ((now - currentLastUpload) > STALE_TIMEOUT) {
       snprintf(cachedLine2, sizeof(cachedLine2), "Stale %s %s", valStr.c_str(), slaves[idx].unit);

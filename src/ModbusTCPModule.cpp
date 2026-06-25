@@ -47,7 +47,7 @@ void ModbusTCPModule::handleClient(EthernetClient& client) {
                     if (_rtu->readFromSlave(req)) {
                         sendTCPResponse(client, req);
                     }else{
-                        // TODO
+                        // TODO. Si falla no se esta devolviendo dato. pero quiza deberiamos hacer algo
                     }
                     
                     xSemaphoreGive(_rtuMutex);
