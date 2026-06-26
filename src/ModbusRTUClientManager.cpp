@@ -28,3 +28,13 @@ const char* ModbusRTUClientManager::getLastError() {
     return ModbusRTUClient.lastError();
 }
 
+int ModbusRTUClientManager::getModbusClientDataType(uint8_t functionCode) {
+  switch (functionCode) {
+    case 0x01: return COILS;
+    case 0x02: return DISCRETE_INPUTS;
+    case 0x03: return HOLDING_REGISTERS;
+    case 0x04: return INPUT_REGISTERS;
+    default:   return -1;
+  }
+}
+

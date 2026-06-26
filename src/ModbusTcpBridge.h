@@ -4,9 +4,8 @@
 
 #include <Arduino.h>
 #include <Ethernet.h>
-#include "JmodbusBridge.h"
+#include "CommonModbusBridge.h"
 #include "ModbusRTUClientManager.h"
-
 
 class WeidosEthernetServer : public EthernetServer {
 public:
@@ -21,6 +20,10 @@ public:
     ModbusTcpBridge(uint16_t port, ModbusRTUClientManager* rtuModule);
     void begin(byte mac[], IPAddress ip);
     void process(); // Esta función se llamará repetidamente en el loop central
+    static bool parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruct* out_struct);
+
+private: 
+    
 
 protected:
     uint16_t _port;

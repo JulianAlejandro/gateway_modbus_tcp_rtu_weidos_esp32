@@ -2,7 +2,7 @@
 #define MODBUS_RTU_MODULE_H
 
 #include <Arduino.h>
-#include "JmodbusBridge.h"
+#include "CommonModbusBridge.h"
 //
 class ModbusRTUClientManager {
 public:
@@ -18,6 +18,8 @@ public:
 
 private:
     uint32_t _baudrate;
+    int getModbusClientDataType(uint8_t functionCode);
+    
 };
 
 #endif

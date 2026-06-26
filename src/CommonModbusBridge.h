@@ -27,8 +27,4 @@ struct modbusRTUStruct {
   bool     isValid;
 };
 
-// Utilidades de conversión y mapeo
-bool parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruct* out_struct);
-int getModbusClientDataType(uint8_t functionCode);
-
 #endif

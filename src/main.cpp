@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "ModbusRTUClientManager.h"
-#include "ExtendedModbusTCPBridge.h"
+#include "EmasesaModbusTCPBridge.h"
 #include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
 
 #define BAUDRATE 19200
@@ -10,7 +10,7 @@ IPAddress ip(192, 168, 1, 150);
 uint16_t modbusPort = 502;    
 
 ModbusRTUClientManager slaveRtu(BAUDRATE);
-ExtendedModbusTCPBridge MasterTcp(modbusPort, &slaveRtu);
+EmasesaModbusTCPBridge emasesaTcpBridge(modbusPort, &slaveRtu); // es un modbus TCP bridge con multihilo y callbacks. 
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 SemaphoreHandle_t xModbusDataMutex = NULL;  
@@ -53,7 +53,7 @@ void checkTCPReqCallback(const modbusTCPStruct& req, uint16_t index, uint16_t va
 
 void modbusGatewayTask(void * pvParameters) {
     for(;;) {
-        MasterTcp.process();
+        emasesaTcpBridge.process();
         vTaskDelay(pdMS_TO_TICKS(1)); 
     }
 }
@@ -68,9 +68,9 @@ void setup() {
   if(xModbusDataMutex == NULL || xModbusRTUMutex == NULL) while(1); 
 
   slaveRtu.begin();
-  MasterTcp.setHardwareMutex(xModbusRTUMutex);
-  MasterTcp.setInterceptor(checkTCPReqCallback); 
-  MasterTcp.begin(mac, ip);
+  emasesaTcpBridge.setHardwareMutex(xModbusRTUMutex);
+  emasesaTcpBridge.setInterceptor(checkTCPReqCallback); 
+  emasesaTcpBridge.begin(mac, ip);
 
   xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
 

@@ -1,17 +1,17 @@
-#include "ExtendedModbusTCPBridge.h"
+#include "EmasesaModbusTCPBridge.h"
 
-ExtendedModbusTCPBridge::ExtendedModbusTCPBridge(uint16_t port, ModbusRTUClientManager* rtuModule)
+EmasesaModbusTCPBridge::EmasesaModbusTCPBridge(uint16_t port, ModbusRTUClientManager* rtuModule)
     : ModbusTcpBridge(port, rtuModule) {} // Llama al constructor base
 
-void ExtendedModbusTCPBridge::setHardwareMutex(SemaphoreHandle_t rtuMutex) {
+void EmasesaModbusTCPBridge::setHardwareMutex(SemaphoreHandle_t rtuMutex) {
     _rtuMutex = rtuMutex;
 }
 
-void ExtendedModbusTCPBridge::setInterceptor(ModbusInterceptorCallback callback) {
+void EmasesaModbusTCPBridge::setInterceptor(ModbusInterceptorCallback callback) {
     _interceptor = callback;
 }
 
-void ExtendedModbusTCPBridge::handleClient(EthernetClient& client) {
+void EmasesaModbusTCPBridge::handleClient(EthernetClient& client) {
     while (client.connected()) {
         if (client.available()) {
             int index = 0;
@@ -22,31 +22,38 @@ void ExtendedModbusTCPBridge::handleClient(EthernetClient& client) {
 
             modbusTCPStruct req;
             if (parseTCPBufferToStruct(_tcpRequestBuffer, &req)) {
-                
-                // --- Lógica del Mutex añadida de forma limpia en la clase hija ---
-                bool hasMutex = true;
-                if (_rtuMutex != nullptr) {
-                    hasMutex = (xSemaphoreTake(_rtuMutex, pdMS_TO_TICKS(500)) == pdTRUE);
-                }
 
-                if (hasMutex) {
-                    if (_rtu->readFromSlave(req)) {
-                        sendTCPResponse(client, req); // Llamará al sendTCPResponse de esta clase hija
-                    }else{
-                        // todo.
-                    }
-                    
+                //if(callback(req)){
+                
+                    // --- Lógica del Mutex añadida de forma limpia en la clase hija ---
+                    // en esta clase especifica , se usa el _rtuMutex siendo compartido con otro hilo externo. 
+                    bool hasMutex = true;
                     if (_rtuMutex != nullptr) {
-                        xSemaphoreGive(_rtuMutex);
+                        hasMutex = (xSemaphoreTake(_rtuMutex, pdMS_TO_TICKS(500)) == pdTRUE);
                     }
-                }
+
+                    if (hasMutex) {
+                        if (_rtu->readFromSlave(req)) {
+                            sendTCPResponse(client, req); // Llamará al sendTCPResponse de esta clase hija
+                        }else{
+                            // todo.
+                        }
+                    
+                        if (_rtuMutex != nullptr) {
+                            xSemaphoreGive(_rtuMutex);
+                        }
+                    }
+
+                //}else{
+
+                //}
             }
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
-void ExtendedModbusTCPBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
+void EmasesaModbusTCPBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
     uint8_t byteCount = req.quantity * 2; 
     uint16_t tcpLength = 3 + byteCount;
 

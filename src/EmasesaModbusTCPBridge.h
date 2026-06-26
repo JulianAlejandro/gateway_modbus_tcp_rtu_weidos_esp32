@@ -1,5 +1,5 @@
-#ifndef EXTENDED_MODBUS_TCP_BRIDGE_H
-#define EXTENDED_MODBUS_TCP_BRIDGE_H
+#ifndef EMASESA_MODBUS_TCP_BRIDGE_H
+#define EMASESA_MODBUS_TCP_BRIDGE_H
 
 #include "ModbusTcpBridge.h"
 #include <freertos/FreeRTOS.h>
@@ -8,10 +8,10 @@
 // Definimos el tipo de callback
 typedef void (*ModbusInterceptorCallback)(const modbusTCPStruct& req, uint16_t index, uint16_t value); 
 
-class ExtendedModbusTCPBridge : public ModbusTcpBridge {
+class EmasesaModbusTCPBridge : public ModbusTcpBridge {
 public:
     // El constructor pasa los parámetros obligatorios a la clase base
-    ExtendedModbusTCPBridge(uint16_t port, ModbusRTUClientManager* rtuModule);
+    EmasesaModbusTCPBridge(uint16_t port, ModbusRTUClientManager* rtuModule);
 
     void setHardwareMutex(SemaphoreHandle_t rtuMutex); 
     void setInterceptor(ModbusInterceptorCallback callback);
