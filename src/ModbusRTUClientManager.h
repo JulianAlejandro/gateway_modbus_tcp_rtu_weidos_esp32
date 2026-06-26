@@ -4,9 +4,9 @@
 #include <Arduino.h>
 #include "JmodbusBridge.h"
 //
-class ModbusRTUModule {
+class ModbusRTUClientManager {
 public:
-    ModbusRTUModule(uint32_t baudrate);
+    ModbusRTUClientManager(uint32_t baudrate);
     bool begin();
     
     // Ejecuta la lectura en el bus físico. Retorna true si el esclavo respondió correctamente.

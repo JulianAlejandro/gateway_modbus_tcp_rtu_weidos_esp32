@@ -5,24 +5,24 @@
 #include <Arduino.h>
 #include <Ethernet.h>
 #include "JmodbusBridge.h"
-#include "ModbusRTUModule.h"
+#include "ModbusRTUClientManager.h"
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
 typedef void (*ModbusInterceptorCallback)(const modbusTCPStruct& req, uint16_t index, uint16_t value); 
 // 2. INSTANCIA DEL SERVIDOR SEGURO
-class WeidosModbusServer : public EthernetServer {
+class WeidosEthernetServer : public EthernetServer {
 public:
-    WeidosModbusServer(uint16_t port) : EthernetServer(port) {}
+    WeidosEthernetServer(uint16_t port) : EthernetServer(port) {}
     virtual void begin(uint16_t port) override {
         EthernetServer::begin(); 
     }
 };
 
-class ModbusTCPModule {
+class MasterModbusTCPClientBridge {
 public:
-    ModbusTCPModule(uint16_t port, ModbusRTUModule* rtuModule);
+    MasterModbusTCPClientBridge(uint16_t port, ModbusRTUClientManager* rtuModule);
     void begin(byte mac[], IPAddress ip);
     void setHardwareMutex(SemaphoreHandle_t rtuMutex); 
     void process(); // Esta función se llamará repetidamente en el loop central
@@ -32,8 +32,8 @@ public:
 
 private:
     uint16_t _port;
-    WeidosModbusServer _server;
-    ModbusRTUModule* _rtu; // Referencia al módulo físico de RTU
+    WeidosEthernetServer _ethernetServer;
+    ModbusRTUClientManager* _rtu; // Referencia al módulo físico de RTU
     SemaphoreHandle_t _rtuMutex;
     byte _tcpRequestBuffer[SIZE_MB_TCP_REQUEST];
 

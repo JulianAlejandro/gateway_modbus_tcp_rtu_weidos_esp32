@@ -1,27 +1,27 @@
 
 
-#include "ModbusTCPModule.h"
+#include "MasterModbusTCPClientBridge.h"
 
 
-ModbusTCPModule::ModbusTCPModule(uint16_t port, ModbusRTUModule* rtuModule ) 
-    : _port(port), _server(port), _rtu(rtuModule) {}
+MasterModbusTCPClientBridge::MasterModbusTCPClientBridge(uint16_t port, ModbusRTUClientManager* rtuModule ) 
+    : _port(port), _ethernetServer(port), _rtu(rtuModule) {}
 
-void ModbusTCPModule::setInterceptor(ModbusInterceptorCallback callback){
+void MasterModbusTCPClientBridge::setInterceptor(ModbusInterceptorCallback callback){
     _interceptor = callback; 
 }
 
-void ModbusTCPModule::begin(byte mac[], IPAddress ip) {
+void MasterModbusTCPClientBridge::begin(byte mac[], IPAddress ip) {
     Ethernet.init(ETHERNET_CS);
     Ethernet.begin(mac, ip);
-    _server.begin(_port);
+    _ethernetServer.begin(_port); 
 }
 
-void ModbusTCPModule::setHardwareMutex(SemaphoreHandle_t rtuMutex) {
+void MasterModbusTCPClientBridge::setHardwareMutex(SemaphoreHandle_t rtuMutex) {
     _rtuMutex = rtuMutex; // Guardamos el candado real para usarlo en handleClient
 }
 
-void ModbusTCPModule::process() {
-    EthernetClient client = _server.available();
+void MasterModbusTCPClientBridge::process() {
+    EthernetClient client = _ethernetServer.available();
     if (client) {
         Serial.println("\n[Modbus TCP] ¡Cliente conectado!");
         handleClient(client);
@@ -29,7 +29,7 @@ void ModbusTCPModule::process() {
 }
 
 
-void ModbusTCPModule::handleClient(EthernetClient& client) {
+void MasterModbusTCPClientBridge::handleClient(EthernetClient& client) {
     while (client.connected()) {
         if (client.available()) {
             int index = 0;
@@ -58,7 +58,7 @@ void ModbusTCPModule::handleClient(EthernetClient& client) {
     }
 }
 
-void ModbusTCPModule::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
+void MasterModbusTCPClientBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
     uint8_t byteCount = req.quantity * 2; 
     uint16_t tcpLength = 3 + byteCount;
 
