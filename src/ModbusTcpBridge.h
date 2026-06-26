@@ -1,0 +1,37 @@
+
+#ifndef MODBUS_TCP_BRIDGE_H
+#define MODBUS_TCP_BRIDGE_H
+
+#include <Arduino.h>
+#include <Ethernet.h>
+#include "JmodbusBridge.h"
+#include "ModbusRTUClientManager.h"
+
+
+class WeidosEthernetServer : public EthernetServer {
+public:
+    WeidosEthernetServer(uint16_t port) : EthernetServer(port) {}
+    virtual void begin(uint16_t port) override {
+        EthernetServer::begin(); 
+    }
+};
+
+class ModbusTcpBridge {
+public:
+    ModbusTcpBridge(uint16_t port, ModbusRTUClientManager* rtuModule);
+    void begin(byte mac[], IPAddress ip);
+    void process(); // Esta función se llamará repetidamente en el loop central
+
+protected:
+    uint16_t _port;
+    WeidosEthernetServer _ethernetServer;
+    ModbusRTUClientManager* _rtu; // Referencia al módulo físico de RTU
+    //SemaphoreHandle_t _rtuMutex;
+    byte _tcpRequestBuffer[SIZE_MB_TCP_REQUEST];
+
+    virtual void handleClient(EthernetClient& client);
+    virtual void sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req);
+};
+//
+#endif
+

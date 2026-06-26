@@ -1,26 +1,18 @@
 
 
-#include "MasterModbusTCPClientBridge.h"
+#include "ModbusTcpBridge.h"
 
 
-MasterModbusTCPClientBridge::MasterModbusTCPClientBridge(uint16_t port, ModbusRTUClientManager* rtuModule ) 
+ModbusTcpBridge::ModbusTcpBridge(uint16_t port, ModbusRTUClientManager* rtuModule ) 
     : _port(port), _ethernetServer(port), _rtu(rtuModule) {}
 
-void MasterModbusTCPClientBridge::setInterceptor(ModbusInterceptorCallback callback){
-    _interceptor = callback; 
-}
-
-void MasterModbusTCPClientBridge::begin(byte mac[], IPAddress ip) {
+void ModbusTcpBridge::begin(byte mac[], IPAddress ip) {
     Ethernet.init(ETHERNET_CS);
     Ethernet.begin(mac, ip);
     _ethernetServer.begin(_port); 
 }
 
-void MasterModbusTCPClientBridge::setHardwareMutex(SemaphoreHandle_t rtuMutex) {
-    _rtuMutex = rtuMutex; // Guardamos el candado real para usarlo en handleClient
-}
-
-void MasterModbusTCPClientBridge::process() {
+void ModbusTcpBridge::process() {
     EthernetClient client = _ethernetServer.available();
     if (client) {
         Serial.println("\n[Modbus TCP] ¡Cliente conectado!");
@@ -28,8 +20,7 @@ void MasterModbusTCPClientBridge::process() {
     }
 }
 
-
-void MasterModbusTCPClientBridge::handleClient(EthernetClient& client) {
+void ModbusTcpBridge::handleClient(EthernetClient& client) {
     while (client.connected()) {
         if (client.available()) {
             int index = 0;
@@ -40,25 +31,19 @@ void MasterModbusTCPClientBridge::handleClient(EthernetClient& client) {
 
             modbusTCPStruct req;
             if (parseTCPBufferToStruct(_tcpRequestBuffer, &req)) {
-                
-                // Usamos nuestro mutex interno inyectado de forma segura
-                if (xSemaphoreTake(_rtuMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-                    
-                    if (_rtu->readFromSlave(req)) {
+                                   
+                if (_rtu->readFromSlave(req)) {
                         sendTCPResponse(client, req);
-                    }else{
-                        // TODO. Si falla no se esta devolviendo dato. pero quiza deberiamos hacer algo
-                    }
-                    
-                    xSemaphoreGive(_rtuMutex);
-                }
+                }else{
+                        // TODO.
+                }      
             }
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
-void MasterModbusTCPClientBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
+void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
     uint8_t byteCount = req.quantity * 2; 
     uint16_t tcpLength = 3 + byteCount;
 
@@ -78,10 +63,6 @@ void MasterModbusTCPClientBridge::sendTCPResponse(EthernetClient& client, const 
     // Volcar los registros leídos al vuelo desde el módulo RTU hacia el socket TCP
     for (int i = 0; i < req.quantity; i++) {
         uint16_t valorRegistro = (uint16_t)_rtu->readRegister();
-
-        if(_interceptor != nullptr){
-            _interceptor(req, i, valorRegistro); 
-        }
 
         client.write(highByte(valorRegistro));
         client.write(lowByte(valorRegistro));

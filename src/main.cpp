@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "ModbusRTUClientManager.h"
-#include "MasterModbusTCPClientBridge.h"
+#include "ExtendedModbusTCPBridge.h"
 #include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
 
 #define BAUDRATE 19200
@@ -10,7 +10,7 @@ IPAddress ip(192, 168, 1, 150);
 uint16_t modbusPort = 502;    
 
 ModbusRTUClientManager slaveRtu(BAUDRATE);
-MasterModbusTCPClientBridge MasterTcp(modbusPort, &slaveRtu);
+ExtendedModbusTCPBridge MasterTcp(modbusPort, &slaveRtu);
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 SemaphoreHandle_t xModbusDataMutex = NULL;  
