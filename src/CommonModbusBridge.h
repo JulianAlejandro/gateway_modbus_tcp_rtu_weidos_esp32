@@ -1,5 +1,5 @@
-#ifndef MODBUS_BRIDGE_H
-#define MODBUS_BRIDGE_H
+#ifndef COMMON_MODBUS_BRIDGE_H
+#define COMMON_MODBUS_BRIDGE_H
 
 #include <Arduino.h>
 
@@ -10,15 +10,15 @@
 struct modbusTCPStruct {
   //MBAP 7 bytes
   uint16_t transactionID;
-  
   uint16_t protocolID;
   uint16_t length;
   uint8_t  slaveID;
+  // PDU
   uint8_t  functionCode;
   uint16_t address;
   uint16_t quantity;
 
-  bool     isValid;
+  bool     isValid; // Esto aqui puede sobrar 
 };
 
 struct modbusRTUStruct {
@@ -26,7 +26,8 @@ struct modbusRTUStruct {
   uint8_t  functionCode;
   uint16_t address;
   uint16_t quantity;
-  uint16_t crc;
+
+  uint16_t crc; // esto no lo usamos 
   bool     isValid;
 };
 

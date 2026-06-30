@@ -29,7 +29,7 @@ protected:
     uint16_t _port;
     WeidosEthernetServer _ethernetServer;
     ModbusRTUClientManager* _rtu; // Referencia al módulo físico de RTU
-    //SemaphoreHandle_t _rtuMutex;
+    
     byte _tcpRequestBuffer[SIZE_MB_TCP_REQUEST];
 
     virtual void handleClient(EthernetClient& client);
