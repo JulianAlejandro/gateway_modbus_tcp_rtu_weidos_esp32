@@ -8,13 +8,16 @@
 
 // Estructuras de datos limpias para el paso de información
 struct modbusTCPStruct {
+  //MBAP 7 bytes
   uint16_t transactionID;
+  
   uint16_t protocolID;
   uint16_t length;
   uint8_t  slaveID;
   uint8_t  functionCode;
   uint16_t address;
   uint16_t quantity;
+
   bool     isValid;
 };
 

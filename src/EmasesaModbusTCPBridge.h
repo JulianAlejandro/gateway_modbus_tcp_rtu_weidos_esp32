@@ -8,10 +8,10 @@
 // Definimos el tipo de callback
 typedef void (*ModbusInterceptorCallback)(const modbusTCPStruct& req, uint16_t index, uint16_t value); 
 
-class EmasesaModbusTCPBridge : public ModbusTcpBridge {
+class EmasesaModbusTcpBridge : public ModbusTcpBridge {
 public:
     // El constructor pasa los parámetros obligatorios a la clase base
-    EmasesaModbusTCPBridge(uint16_t port, ModbusRTUClientManager* rtuModule);
+    EmasesaModbusTcpBridge(uint16_t port, ModbusRTUClientManager* rtuModule);
 
     void setHardwareMutex(SemaphoreHandle_t rtuMutex); 
     void setInterceptor(ModbusInterceptorCallback callback);

@@ -10,7 +10,7 @@ IPAddress ip(192, 168, 1, 150);
 uint16_t modbusPort = 502;    
 
 ModbusRTUClientManager slaveRtu(BAUDRATE);
-EmasesaModbusTCPBridge emasesaTcpBridge(modbusPort, &slaveRtu); // es un modbus TCP bridge con multihilo y callbacks. 
+EmasesaModbusTcpBridge emasesaTcpBridge(modbusPort, &slaveRtu); // es un modbus TCP bridge con multihilo y callbacks. 
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 SemaphoreHandle_t xModbusDataMutex = NULL;  

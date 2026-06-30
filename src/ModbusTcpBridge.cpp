@@ -72,7 +72,17 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
 bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruct* out_struct) {
   if (out_struct == nullptr) return false;
 
-  uint8_t fCode = tcp_buf[7];
+  // TODO:
+  /*
+  // 1. En parseTCPBufferToStruct, expande las funciones permitidas:
+    if (fCode != 0x03 && fCode != 0x04 && fCode != 0x06 && fCode != 0x10) {
+        out_struct->isValid = false;
+        return false;
+    }
+    // Ojo: Si es función 0x10 (Write Multiple), el buffer TCP contendrá más bytes 
+    // con los valores a escribir que también deberás guardar o pasar al RTU.
+  */
+  uint8_t fCode = tcp_buf[7]; // TODO esto solo funciona para fcode 0x03 y fCode 0x04 MAL , modificar. 
   if (fCode != 0x03 && fCode != 0x04) {
     out_struct->isValid = false;
     return false;
@@ -89,3 +99,54 @@ bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruc
 
   return true;
 }
+
+/*
+void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
+    uint16_t tcpLength = 0;
+    
+    // El cálculo del largo (Length) en el header MBAP varía según la función
+    if (req.functionCode == 0x03 || req.functionCode == 0x04) {
+        tcpLength = 3 + (req.quantity * 2); // Unit ID (1) + FuncCode (1) + ByteCount (1) + Datos
+    } else if (req.functionCode == 0x06) {
+        tcpLength = 6; // Unit ID (1) + FuncCode (1) + Address (2) + Value (2)
+    } else if (req.functionCode == 0x10) {
+        tcpLength = 6; // Unit ID (1) + FuncCode (1) + Address (2) + Quantity (2)
+    }
+
+    // Enviar MBAP Header estándar
+    client.write((uint8_t)(req.transactionID >> 8));
+    client.write((uint8_t)(req.transactionID & 0xFF));
+    client.write(0);
+    client.write(0);
+    client.write(highByte(tcpLength));
+    client.write(lowByte(tcpLength));
+    client.write(req.slaveID);
+
+    // Enviar la PDU (Un switch case ayuda a manejar cada respuesta de forma limpia)
+    switch(req.functionCode) {
+        case 0x03:
+        case 0x04:
+            client.write(req.functionCode);
+            client.write(req.quantity * 2);
+            for (int i = 0; i < req.quantity; i++) {
+                uint16_t valor = (uint16_t)_rtu->readRegister(); // O desde un array de respuesta
+                client.write(highByte(valor));
+                client.write(lowByte(valor));
+            }
+            break;
+            
+        case 0x06:
+            client.write(req.functionCode);
+            client.write(highByte(req.address));
+            client.write(lowByte(req.address));
+            // Aquí deberías devolver el valor que se escribió con éxito
+            uint16_t valorEscrito = _rtu->getWrittenValue(); 
+            client.write(highByte(valorEscrito));
+            client.write(lowByte(valorEscrito));
+            break;
+            
+        // case 0x10: ... implementar eco de registros múltiples
+    }
+}
+
+*/

@@ -1,17 +1,17 @@
-#include "EmasesaModbusTCPBridge.h"
+#include "EmasesaModbusTcpBridge.h"
 
-EmasesaModbusTCPBridge::EmasesaModbusTCPBridge(uint16_t port, ModbusRTUClientManager* rtuModule)
+EmasesaModbusTcpBridge::EmasesaModbusTcpBridge(uint16_t port, ModbusRTUClientManager* rtuModule)
     : ModbusTcpBridge(port, rtuModule) {} // Llama al constructor base
 
-void EmasesaModbusTCPBridge::setHardwareMutex(SemaphoreHandle_t rtuMutex) {
+void EmasesaModbusTcpBridge::setHardwareMutex(SemaphoreHandle_t rtuMutex) {
     _rtuMutex = rtuMutex;
 }
 
-void EmasesaModbusTCPBridge::setInterceptor(ModbusInterceptorCallback callback) {
+void EmasesaModbusTcpBridge::setInterceptor(ModbusInterceptorCallback callback) {
     _interceptor = callback;
 }
 
-void EmasesaModbusTCPBridge::handleClient(EthernetClient& client) {
+void EmasesaModbusTcpBridge::handleClient(EthernetClient& client) {
     while (client.connected()) {
         if (client.available()) {
             int index = 0;
@@ -53,7 +53,7 @@ void EmasesaModbusTCPBridge::handleClient(EthernetClient& client) {
     }
 }
 
-void EmasesaModbusTCPBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
+void EmasesaModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
     uint8_t byteCount = req.quantity * 2; 
     uint16_t tcpLength = 3 + byteCount;
 
