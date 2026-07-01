@@ -1,9 +1,49 @@
 #include <Arduino.h>
 #include "ModbusRTUClientManager.h"
+#include "ModbusTCPBridge.h"
+
+#define BAUDRATE 9600
+
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+IPAddress ip(192, 168, 1, 150); 
+uint16_t modbusPort = 502;    
+
+ModbusRTUClientManager slaveRtu(BAUDRATE);
+ModbusTcpBridge tcpBridge(modbusPort, &slaveRtu); // es un modbus TCP bridge con multihilo y callbacks. 
+
+TaskHandle_t ModbusGatewayTaskHandle = NULL;
+
+void modbusGatewayTask(void * pvParameters) {
+    for(;;) {
+        tcpBridge.process();
+        vTaskDelay(pdMS_TO_TICKS(1)); 
+    }
+}
+
+void setup() {
+  Serial.begin(115200);
+  while(!Serial){}
+
+  slaveRtu.begin();
+  tcpBridge.begin(mac, ip);
+
+  xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
+
+  delay(1000); 
+}
+
+void loop() {
+  delay(100); 
+}
+
+
+/*
+#include <Arduino.h>
+#include "ModbusRTUClientManager.h"
 #include "EmasesaModbusTCPBridge.h"
 #include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
 
-#define BAUDRATE 19200
+#define BAUDRATE 9600
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress ip(192, 168, 1, 150); 
@@ -20,7 +60,7 @@ SemaphoreHandle_t xModbusRTUMutex = NULL;
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
   //                          constants                             |                         control variables 
-  // name     unit  decimals  salveId adress  quantity functionCode | dataRaw  convertedData  flagUpdate  lastTimeRef   isNew  errCounter 
+  //   name   unit  decimals  salveId adress  quantity functionCode | dataRaw  convertedData  flagUpdate  lastTimeRef   isNew  errCounter 
     { "CL2",  "ppm",  3,        1,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,         false,    0},
     { "COND", "us",   1,        2,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,         false,    0},
     { "REDOX","mV",   1,        3,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,         false,    0},
@@ -169,3 +209,5 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){ // todo quitar el now
   } 
   return lecturaExitosa; 
 }
+
+*/

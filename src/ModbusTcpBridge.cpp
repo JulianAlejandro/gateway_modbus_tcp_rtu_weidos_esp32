@@ -1,6 +1,9 @@
 
 
 #include "ModbusTcpBridge.h"
+#include "esp_log.h"
+
+static const char* TAG = "MB_TCP_BRDG";
 
 
 ModbusTcpBridge::ModbusTcpBridge(uint16_t port, ModbusRTUClientManager* rtuModule ) 
@@ -15,7 +18,8 @@ void ModbusTcpBridge::begin(byte mac[], IPAddress ip) {
 void ModbusTcpBridge::process() {
     EthernetClient client = _ethernetServer.available();
     if (client) {
-        Serial.println("\n[Modbus TCP] ¡Cliente conectado!");
+        //Serial.println("\n[Modbus TCP] ¡Cliente conectado!");
+        ESP_LOGI(TAG, "\n[Modbus TCP] ¡Cliente conectado!");
         handleClient(client);
     }
 }
@@ -35,7 +39,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) {
                 if (_rtu->readFromSlave(req)) {
                         sendTCPResponse(client, req);
                 }else{
-                        // TODO.
+                    ESP_LOGE(TAG, "Request TCP no ha tenido exito"); 
                 }      
             }
         }
@@ -45,12 +49,13 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) {
 
 void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
 
-    uint8_t byteCount = 0;
-
+    uint8_t byteCount = 0; 
+    
     // 1. Calcular cuántos bytes de datos reales vamos a enviar
     if (req.functionCode == 0x01 || req.functionCode == 0x02) {
         // Para Coils: 1 byte por cada 8 bits (redondeado hacia arriba)
         byteCount = (req.quantity + 7) / 8;
+        ESP_LOGI(TAG, "function code 0x01 y 0x02 byteCount %u \n", byteCount); 
     } else {
         // Para Registros (0x03 / 0x04): 2 bytes por registro
         byteCount = req.quantity * 2; 
@@ -73,8 +78,8 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
     client.write(byteCount);
 
     // 4. Volcar los datos leyendo desde el búfer de la librería RTU
-    if (req.functionCode == 0x01 || req.functionCode == 0x02) {
-        
+    if (req.functionCode == 0x01 || req.functionCode == 0x02) { 
+
         int coilsRead = 0;
         // Iteramos sobre la cantidad de bytes que debemos construir y enviar
         for (int i = 0; i < byteCount; i++) {
@@ -100,7 +105,7 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
             // Enviamos el byte empaquetado al cliente TCP
             client.write(currentByte);
         }
-    } else {
+    } else { // esto es en caso de que llegue un function code 03 o 04 
         // Lógica existente para Registros (16 bits)
         for (int i = 0; i < req.quantity; i++) {
             uint16_t valorRegistro = (uint16_t)_rtu->readRegister();
@@ -141,10 +146,12 @@ bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruc
 
   uint8_t fCode = tcp_buf[7]; 
 
-  if (fCode != 0x01 && fCode != 0x03 && fCode != 0x04) {
+  if (fCode != 0x01 && fCode !=0x02 && fCode != 0x03 && fCode != 0x04) {
     out_struct->isValid = false;
     return false;
   }
+
+  ESP_LOGI(TAG, "Fcode: %u: ", fCode); 
 
   out_struct->transactionID = (tcp_buf[0] << 8) | tcp_buf[1];
   out_struct->protocolID    = (tcp_buf[2] << 8) | tcp_buf[3];

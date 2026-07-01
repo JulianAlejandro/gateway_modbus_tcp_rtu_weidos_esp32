@@ -7,6 +7,7 @@
 #include "CommonModbusBridge.h"
 #include "ModbusRTUClientManager.h"
 
+
 class WeidosEthernetServer : public EthernetServer {
 public:
     WeidosEthernetServer(uint16_t port) : EthernetServer(port) {}

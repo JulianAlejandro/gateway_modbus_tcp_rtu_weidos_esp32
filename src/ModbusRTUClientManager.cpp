@@ -3,6 +3,9 @@
 #include "ModbusRTUClientManager.h"
 #include <ArduinoRS485.h>
 #include <ModbusRTUClient.h>
+#include "esp_log.h"
+
+static const char* TAG = "MB_RTU_CLN_MNGR"; 
 
 ModbusRTUClientManager::ModbusRTUClientManager(uint32_t baudrate) : _baudrate(baudrate) {}
 
@@ -16,7 +19,7 @@ bool ModbusRTUClientManager::begin() {
 bool ModbusRTUClientManager::readFromSlave(const modbusTCPStruct& request) {
     int dataType = getModbusClientDataType(request.functionCode);
     if (dataType == -1) return false;
-
+    ESP_LOGI(TAG, "Modbus RTU Client, slave id: %d, DataType: %d, Adress: %d, Quantity: %d \n", request.slaveID, dataType, request.address, request.quantity);
     return ModbusRTUClient.requestFrom(request.slaveID, dataType, request.address, request.quantity);
 }
 
