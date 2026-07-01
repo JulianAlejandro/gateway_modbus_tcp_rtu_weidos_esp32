@@ -1,45 +1,5 @@
 #include <Arduino.h>
 #include "ModbusRTUClientManager.h"
-#include "ModbusTCPBridge.h"
-
-#define BAUDRATE 9600
-
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-IPAddress ip(192, 168, 1, 150); 
-uint16_t modbusPort = 502;    
-
-ModbusRTUClientManager slaveRtu(BAUDRATE);
-ModbusTcpBridge tcpBridge(modbusPort, &slaveRtu); // es un modbus TCP bridge con multihilo y callbacks. 
-
-TaskHandle_t ModbusGatewayTaskHandle = NULL;
-
-void modbusGatewayTask(void * pvParameters) {
-    for(;;) {
-        tcpBridge.process();
-        vTaskDelay(pdMS_TO_TICKS(1)); 
-    }
-}
-
-void setup() {
-  Serial.begin(115200);
-  while(!Serial){}
-
-  slaveRtu.begin();
-  tcpBridge.begin(mac, ip);
-
-  xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
-
-  delay(1000); 
-}
-
-void loop() {
-  delay(100); 
-}
-
-
-/*
-#include <Arduino.h>
-#include "ModbusRTUClientManager.h"
 #include "EmasesaModbusTCPBridge.h"
 #include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
 
@@ -209,5 +169,44 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){ // todo quitar el now
   } 
   return lecturaExitosa; 
 }
+//----------------------------------PRUEBAS SOBRE EL GATEWAY ORIGINAL------------------------------
+/*
+#include <Arduino.h>
+#include "ModbusRTUClientManager.h"
+#include "ModbusTCPBridge.h"
 
+#define BAUDRATE 9600
+
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+IPAddress ip(192, 168, 1, 150); 
+uint16_t modbusPort = 502;    
+
+ModbusRTUClientManager slaveRtu(BAUDRATE);
+ModbusTcpBridge tcpBridge(modbusPort, &slaveRtu); // es un modbus TCP bridge con multihilo y callbacks. 
+
+TaskHandle_t ModbusGatewayTaskHandle = NULL;
+
+void modbusGatewayTask(void * pvParameters) {
+    for(;;) {
+        tcpBridge.process();
+        vTaskDelay(pdMS_TO_TICKS(1)); 
+    }
+}
+
+void setup() {
+  Serial.begin(115200);
+  while(!Serial){}
+
+  slaveRtu.begin();
+  tcpBridge.begin(mac, ip);
+
+  xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
+
+  delay(1000); 
+}
+
+void loop() {
+  delay(100); 
+}
 */
+

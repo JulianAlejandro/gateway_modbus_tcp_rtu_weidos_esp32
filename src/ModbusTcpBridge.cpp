@@ -39,7 +39,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) {
                 if (_rtu->readFromSlave(req)) {
                         sendTCPResponse(client, req);
                 }else{
-                    ESP_LOGE(TAG, "Request TCP no ha tenido exito"); 
+                    //ESP_LOGE(TAG, "Request TCP no ha tenido exito"); 
                 }      
             }
         }
@@ -55,7 +55,7 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
     if (req.functionCode == 0x01 || req.functionCode == 0x02) {
         // Para Coils: 1 byte por cada 8 bits (redondeado hacia arriba)
         byteCount = (req.quantity + 7) / 8;
-        ESP_LOGI(TAG, "function code 0x01 y 0x02 byteCount %u \n", byteCount); 
+        //ESP_LOGI(TAG, "function code 0x01 y 0x02 byteCount %u \n", byteCount); 
     } else {
         // Para Registros (0x03 / 0x04): 2 bytes por registro
         byteCount = req.quantity * 2; 
@@ -114,31 +114,6 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
         }
     }
 
-    /*
-    uint8_t byteCount = req.quantity * 2; 
-    uint16_t tcpLength = 3 + byteCount;
-
-    // MBAP Header
-    client.write((uint8_t)(req.transactionID >> 8));
-    client.write((uint8_t)(req.transactionID & 0xFF));
-    client.write((uint8_t)0);
-    client.write((uint8_t)0);
-    client.write(highByte(tcpLength));
-    client.write(lowByte(tcpLength));
-    client.write(req.slaveID);
-
-    // PDU
-    client.write(req.functionCode);
-    client.write(byteCount);
-
-    // Volcar los registros leídos al vuelo desde el módulo RTU hacia el socket TCP
-    for (int i = 0; i < req.quantity; i++) {
-        uint16_t valorRegistro = (uint16_t)_rtu->readRegister();
-
-        client.write(highByte(valorRegistro));
-        client.write(lowByte(valorRegistro));
-    }
-    */
 }
 
 bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruct* out_struct) {
@@ -159,7 +134,7 @@ bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruc
   out_struct->slaveID       = tcp_buf[6];
   out_struct->functionCode  = fCode;
   out_struct->address       = (tcp_buf[8] << 8) | tcp_buf[9];
-  out_struct->quantity      = (tcp_buf[10] << 8) | tcp_buf[11]; // Aquí representa cuántas bobinas queremos leer
+  out_struct->quantity      = (tcp_buf[10] << 8) | tcp_buf[11]; 
   out_struct->isValid       = true;
 
   return true;
