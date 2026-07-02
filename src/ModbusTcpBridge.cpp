@@ -52,13 +52,51 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) {
 
             bool rtuSuccess = false;
 
-            // --- PROCESAMIENTO DIRECTO ---
-            if(req.functionCode == 0x06){
-                uint16_t registerValue = req.quantity;
-                rtuSuccess = _rtuClient->holdingRegisterWrite(req.slaveID, req.address, registerValue); 
+// --- PROCESAMIENTO DIRECTO ---
+            if (req.functionCode == 0x0F) { // FC 15: Write Multiple Coils
+                if (_rtuClient->beginTransmission(req.slaveID, COILS, req.address, req.quantity_value)) {
+                    int coilsWritten = 0;
+                    uint8_t byteCount = _tcpRequestBuffer[12];
+                    
+                    for (int i = 0; i < byteCount; i++) {
+                        uint8_t currentByte = _tcpRequestBuffer[13 + i];
+                        for (int bit = 0; bit < 8; bit++) {
+                            if (coilsWritten < req.quantity_value) {
+                                uint8_t bitValue = (currentByte >> bit) & 0x01;
+                                _rtuClient->write(bitValue);
+                                coilsWritten++;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    rtuSuccess = _rtuClient->endTransmission();
+                } else {
+                    rtuSuccess = false;
+                }
 
-            }else if (req.functionCode == 0x05) {
-                uint8_t coilValue = (req.quantity == 0xFF00) ? 1 : 0; // se usa quantity para almacenar el valor 
+            } else if (req.functionCode == 0x10) { // <<--- FC 16: NUEVO BLOQUE!
+                if (_rtuClient->beginTransmission(req.slaveID, HOLDING_REGISTERS, req.address, req.quantity_value)) {
+                    int tcpIndex = 13; // Los datos de los registros inician en el byte 13
+                    
+                    for (int i = 0; i < req.quantity_value; i++) {
+                        // Unimos los dos bytes consecutivos para formar el valor de 16 bits
+                        uint16_t registerValue = (_tcpRequestBuffer[tcpIndex] << 8) | _tcpRequestBuffer[tcpIndex + 1];
+                        
+                        _rtuClient->write(registerValue);
+                        tcpIndex += 2; // Avanzamos 2 bytes para apuntar al siguiente registro
+                    }
+                    rtuSuccess = _rtuClient->endTransmission(); // Calcula CRC, commuta pin RS485 y envía de golpe
+                } else {
+                    rtuSuccess = false;
+                }
+
+            } else if (req.functionCode == 0x06) {
+                uint16_t registerValue = req.quantity_value;
+                rtuSuccess = _rtuClient->holdingRegisterWrite(req.slaveID, req.address, registerValue);
+
+            } else if (req.functionCode == 0x05) {
+                uint8_t coilValue = (req.quantity_value == 0xFF00) ? 1 : 0; 
                 rtuSuccess = _rtuClient->coilWrite(req.slaveID, req.address, coilValue);
             } else {
                 int dataType = -1;
@@ -67,7 +105,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) {
                 else if (req.functionCode == 0x03) dataType = HOLDING_REGISTERS;
                 else if (req.functionCode == 0x04) dataType = INPUT_REGISTERS;
 
-                rtuSuccess = _rtuClient->requestFrom(req.slaveID, dataType, req.address, req.quantity);
+                rtuSuccess = _rtuClient->requestFrom(req.slaveID, dataType, req.address, req.quantity_value);
             }
 
             // 2. Gestionar la Respuesta o la Excepción
@@ -100,10 +138,11 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) {
 
 void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
 
-    // Casuística específica para FC 0x05 (Write Single Coil)
-    if (req.functionCode == 0x05 || req.functionCode == 0x06) {
-        // En un FC 0x05 la respuesta mide exactamente 5 bytes después del Unit ID:
-        // [Function Code (1B)] + [Address (2B)] + [Value (2B)]
+
+    // Casuística específica para FC 0x05, 0x06 y 0x0F (Respuestas tipo ECO)
+if (req.functionCode == 0x05 || req.functionCode == 0x06 || 
+        req.functionCode == 0x0F || req.functionCode == 0x10) { // <-- Añadido el 0x10 aquí
+        
         uint16_t tcpLength = 6; 
 
         // 1. Enviar MBAP Header
@@ -119,19 +158,20 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
         client.write(req.functionCode);
         client.write(highByte(req.address));
         client.write(lowByte(req.address));
-        client.write(highByte(req.quantity)); // Devuelve el 0xFF00 o 0x0000 original
-        client.write(lowByte(req.quantity));
+        client.write(highByte(req.quantity_value)); // Devuelve la cantidad de registros que se escribieron
+        client.write(lowByte(req.quantity_value));
         
         return; // Salimos de la función inmediatamente
     }
+
 
     // --- Lógica existente para lecturas (0x01, 0x02, 0x03, 0x04) ---
     uint8_t byteCount = 0; 
     
     if (req.functionCode == 0x01 || req.functionCode == 0x02) {
-        byteCount = (req.quantity + 7) / 8;
+        byteCount = (req.quantity_value + 7) / 8;
     } else {
-        byteCount = req.quantity * 2; 
+        byteCount = req.quantity_value * 2; 
     }
 
     uint16_t tcpLength = 3 + byteCount;
@@ -152,7 +192,7 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
         for (int i = 0; i < byteCount; i++) {
             uint8_t currentByte = 0;
             for (int bit = 0; bit < 8; bit++) {
-                if (coilsRead < req.quantity) {
+                if (coilsRead < req.quantity_value) {
                     uint8_t bitValue = (uint8_t)_rtuClient->read();
                     if (bitValue == 1) {
                         currentByte |= (1 << bit);
@@ -165,7 +205,7 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
             client.write(currentByte);
         }
     } else { 
-        for (int i = 0; i < req.quantity; i++) {
+        for (int i = 0; i < req.quantity_value; i++) {
             uint16_t valorRegistro = (uint16_t)_rtuClient->read();
             client.write(highByte(valorRegistro));
             client.write(lowByte(valorRegistro));
@@ -201,21 +241,22 @@ bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruc
 
   uint8_t fCode = tcp_buf[7]; 
 
-  if (fCode != 0x01 && fCode !=0x02 && fCode != 0x03 && fCode != 0x04 && fCode != 0x05 && fCode != 0x06) {
+  if (fCode != 0x01 && fCode !=0x02 && fCode != 0x03 && fCode != 0x04 && 
+     fCode != 0x05 && fCode != 0x06 && fCode != 0x0F && fCode != 0x10) {
     out_struct->isValid = false;
     return false;
   }
 
   ESP_LOGI(TAG, "Fcode: %u: ", fCode); 
 
-  out_struct->transactionID = (tcp_buf[0] << 8) | tcp_buf[1];
-  out_struct->protocolID    = (tcp_buf[2] << 8) | tcp_buf[3];
-  out_struct->length        = (tcp_buf[4] << 8) | tcp_buf[5];
-  out_struct->slaveID       = tcp_buf[6];
-  out_struct->functionCode  = fCode;
-  out_struct->address       = (tcp_buf[8] << 8) | tcp_buf[9];
-  out_struct->quantity      = (tcp_buf[10] << 8) | tcp_buf[11]; 
-  out_struct->isValid       = true;
+  out_struct->transactionID  = (tcp_buf[0] << 8) | tcp_buf[1];
+  out_struct->protocolID     = (tcp_buf[2] << 8) | tcp_buf[3];
+  out_struct->length         = (tcp_buf[4] << 8) | tcp_buf[5];
+  out_struct->slaveID        = tcp_buf[6];
+  out_struct->functionCode   = fCode;
+  out_struct->address        = (tcp_buf[8] << 8) | tcp_buf[9];
+  out_struct->quantity_value = (tcp_buf[10] << 8) | tcp_buf[11]; 
+  out_struct->isValid        = true;
 
   return true;
 }

@@ -179,6 +179,7 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){ // todo quitar el now
 #include "ModbusRTUClient.h"
 #include "ModbusTCPBridge.h"
 
+
 //#define BAUDRATE 9600
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
