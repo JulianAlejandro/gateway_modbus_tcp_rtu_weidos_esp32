@@ -1,3 +1,5 @@
+/*
+
 #ifndef EMASESA_MODBUS_TCP_BRIDGE_H
 #define EMASESA_MODBUS_TCP_BRIDGE_H
 
@@ -27,3 +29,5 @@ private:
 };
 
 #endif
+
+*/

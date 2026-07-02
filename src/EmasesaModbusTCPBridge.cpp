@@ -1,3 +1,4 @@
+/*
 #include "EmasesaModbusTcpBridge.h"
 
 EmasesaModbusTcpBridge::EmasesaModbusTcpBridge(uint16_t port, ModbusRTUClientManager* rtuModule)
@@ -126,3 +127,5 @@ void EmasesaModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbu
         }
     }
 }
+
+*/
