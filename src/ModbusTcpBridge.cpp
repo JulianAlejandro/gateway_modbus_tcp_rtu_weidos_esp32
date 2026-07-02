@@ -23,67 +23,10 @@ void ModbusTcpBridge::process() {
         handleClient(client);
     }
 }
-/*
-void ModbusTcpBridge::handleClient(EthernetClient& client) {
-    while (client.connected()) {
-        if (client.available()) {
-            int index = 0;
-            // Almacenamos el tiempo para evitar un cuelgue si entran bytes infinitos
-            uint32_t startTimeout = millis(); 
-            
-            while (client.available() && index < SIZE_MB_TCP_REQUEST) {
-                _tcpRequestBuffer[index++] = client.read();
-                delayMicroseconds(50); // Bajamos un poco para procesar más rápido el buffer hardware
-                
-                // Salvaguarda por si el buffer se queda colgado leyendo
-                if (millis() - startTimeout > 100) { 
-                    break;
-                }
-            }
 
-            modbusTCPStruct req;
-            if (parseTCPBufferToStruct(_tcpRequestBuffer, &req)) {
-                bool rtuSuccess = false;
-
-                if (req.functionCode == 0x05) {
-                    uint8_t coilValue = (req.quantity == 0xFF00) ? 1 : 0;
-                    rtuSuccess = _rtuClient->coilWrite(req.slaveID, req.address, coilValue);
-                } else {
-                    int dataType = -1;
-                    if (req.functionCode == 0x01) dataType = COILS;
-                    else if (req.functionCode == 0x02) dataType = DISCRETE_INPUTS;
-                    else if (req.functionCode == 0x03) dataType = HOLDING_REGISTERS;
-                    else if (req.functionCode == 0x04) dataType = INPUT_REGISTERS;
-
-                    rtuSuccess = _rtuClient->requestFrom(req.slaveID, dataType, req.address, req.quantity);
-                }
-
-                if (rtuSuccess) {
-                    sendTCPResponse(client, req);
-                } else {
-                    int errNoCopy = errno; 
-                    uint8_t exceptionCode = 0x04;
-                    ESP_LOGE(TAG, "Operación RTU fallida. Errno: %d", errNoCopy);
-
-                    if (errNoCopy == ETIMEDOUT || errNoCopy == 110) {
-                        exceptionCode = 0x0A;
-                    } else if (errNoCopy == EINVAL) {
-                        exceptionCode = 0x03;
-                    }
-                    sendTCPException(client, req, exceptionCode);
-                }      
-            }
-        }
-        
-        // ¡CRUCIAL! Cedemos tiempo siempre en cada ciclo del cliente conectado.
-        // Aumentamos a 2ms-5ms para dar suficiente margen al IDLE del Core 0
-        vTaskDelay(pdMS_TO_TICKS(5)); 
-    }
-}
-*/
 
 void ModbusTcpBridge::handleClient(EthernetClient& client) {
-    while (client.connected()) {
+    while (client.connected()) { // TODO analizar y arreglar en un futuro: este while en caso de que el cliente externo mantenga la conexion abierta por error genera problemas en IDLE , watchdog timeout. 
         if (client.available()) {
             int index = 0;
             while (client.available() && index < SIZE_MB_TCP_REQUEST) {
@@ -110,8 +53,12 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) {
             bool rtuSuccess = false;
 
             // --- PROCESAMIENTO DIRECTO ---
-            if (req.functionCode == 0x05) {
-                uint8_t coilValue = (req.quantity == 0xFF00) ? 1 : 0;
+            if(req.functionCode == 0x06){
+                uint16_t registerValue = req.quantity;
+                rtuSuccess = _rtuClient->holdingRegisterWrite(req.slaveID, req.address, registerValue); 
+
+            }else if (req.functionCode == 0x05) {
+                uint8_t coilValue = (req.quantity == 0xFF00) ? 1 : 0; // se usa quantity para almacenar el valor 
                 rtuSuccess = _rtuClient->coilWrite(req.slaveID, req.address, coilValue);
             } else {
                 int dataType = -1;
@@ -151,11 +98,10 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) {
 }
 
 
-
 void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
 
     // Casuística específica para FC 0x05 (Write Single Coil)
-    if (req.functionCode == 0x05) {
+    if (req.functionCode == 0x05 || req.functionCode == 0x06) {
         // En un FC 0x05 la respuesta mide exactamente 5 bytes después del Unit ID:
         // [Function Code (1B)] + [Address (2B)] + [Value (2B)]
         uint16_t tcpLength = 6; 
@@ -226,77 +172,7 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStr
         }
     }
 }
-/*
-void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusTCPStruct& req) {
 
-    uint8_t byteCount = 0; 
-    
-    // 1. Calcular cuántos bytes de datos reales vamos a enviar
-    if (req.functionCode == 0x01 || req.functionCode == 0x02) {
-        // Para Coils: 1 byte por cada 8 bits (redondeado hacia arriba)
-        byteCount = (req.quantity + 7) / 8;
-        //ESP_LOGI(TAG, "function code 0x01 y 0x02 byteCount %u \n", byteCount); 
-    } else {
-        // Para Registros (0x03 / 0x04): 2 bytes por registro
-        byteCount = req.quantity * 2; 
-    }
-
-    // Longitud total restante para el MBAP header (Unit ID + Function Code + Byte Count + Datos)
-    uint16_t tcpLength = 3 + byteCount;
-
-    // 2. Enviar MBAP Header
-    client.write((uint8_t)(req.transactionID >> 8));
-    client.write((uint8_t)(req.transactionID & 0xFF));
-    client.write((uint8_t)0);
-    client.write((uint8_t)0);
-    client.write(highByte(tcpLength));
-    client.write(lowByte(tcpLength));
-    client.write(req.slaveID);
-
-    // 3. Enviar PDU básica
-    client.write(req.functionCode);
-    client.write(byteCount);
-
-    // 4. Volcar los datos leyendo desde el búfer de la librería RTU
-    if (req.functionCode == 0x01 || req.functionCode == 0x02) { 
-
-        int coilsRead = 0;
-        // Iteramos sobre la cantidad de bytes que debemos construir y enviar
-        for (int i = 0; i < byteCount; i++) {
-            uint8_t currentByte = 0;
-
-            // Rellenamos el byte actual bit por bit (hasta 8 bits o hasta terminar los solicitados)
-            for (int bit = 0; bit < 8; bit++) {
-                if (coilsRead < req.quantity) {
-                    // Leemos el bit individual desde el cliente RTU (devuelve 0 o 1)
-                    uint8_t bitValue = (uint8_t)_rtuClient->read();
-                    
-                    // Modbus manda el primer coil en el bit menos significativo (LSB) del byte
-                    if (bitValue == 1) {
-                        currentByte |= (1 << bit);
-                    }
-                    coilsRead++;
-                } else {
-                    // Si ya leímos todos los coils solicitados pero el byte no se ha llenado (8 bits),
-                    // los bits restantes se quedan en 0 por norma de Modbus.
-                    break; 
-                }
-            }
-            // Enviamos el byte empaquetado al cliente TCP
-            client.write(currentByte);
-        }
-    } else { // esto es en caso de que llegue un function code 03 o 04 
-        // Lógica existente para Registros (16 bits)
-        for (int i = 0; i < req.quantity; i++) {
-            uint16_t valorRegistro = (uint16_t)_rtuClient->read();
-            client.write(highByte(valorRegistro));
-            client.write(lowByte(valorRegistro));
-        }
-    }
-
-}
-
-*/
 
 void ModbusTcpBridge::sendTCPException(EthernetClient& client, const modbusTCPStruct& req, uint8_t exceptionCode) {
     // En una excepción, la PDU mide exactamente 2 bytes: [Function Code + 0x80] + [Exception Code]
@@ -325,7 +201,7 @@ bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusTCPStruc
 
   uint8_t fCode = tcp_buf[7]; 
 
-  if (fCode != 0x01 && fCode !=0x02 && fCode != 0x03 && fCode != 0x04 && fCode != 0x05) {
+  if (fCode != 0x01 && fCode !=0x02 && fCode != 0x03 && fCode != 0x04 && fCode != 0x05 && fCode != 0x06) {
     out_struct->isValid = false;
     return false;
   }
