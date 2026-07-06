@@ -2,7 +2,7 @@
 #include "ModbusRTUClient.h"
 #include "ModbusTCPBridge.h"
 #include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
-#include "IThreadLock.h"
+#include "ModbusRtuLock.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress ip(192, 168, 1, 150); 
@@ -10,25 +10,6 @@ uint16_t modbusPort = 502;
 
 uint32_t _baudrate = 9600; 
 
-// --- IMPLEMENTACIÓN DE LA INTERFAZ DE MUTEX PARA FREERTOS ---
-class FreeRtosModbusLock : public IThreadLock {
-public:
-    FreeRtosModbusLock(SemaphoreHandle_t mutex) : _mutex(mutex) {}
-    
-    virtual void lock() override {
-        if (_mutex != NULL) {
-            xSemaphoreTake(_mutex, portMAX_DELAY); // Bloqueo indefinido seguro para hilos
-        }
-    }
-    
-    virtual void unlock() override {
-        if (_mutex != NULL) {
-            xSemaphoreGive(_mutex);
-        }
-    }
-private:
-    SemaphoreHandle_t _mutex;
-};
 
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
@@ -39,7 +20,7 @@ SemaphoreHandle_t xModbusDataMutex = NULL;
 SemaphoreHandle_t xModbusRTUMutex = NULL; 
 
 // Puntero para usar el wrapper del Lock tanto en el main como en el puente
-FreeRtosModbusLock* rtuThreadLock = nullptr;
+ModbusRtuLock rtuThreadLock;
 
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
@@ -56,7 +37,7 @@ void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave);  
 
-void checkTCPReqCallback(const modbusStruct& req, uint16_t index, uint16_t value) {
+void checkTCPReqCallback(const modbusStruct& req, uint16_t index, uint16_t& value) {
     for (uint8_t i = 0; i < NUM_SLAVES; i++) {
         if (req.slaveID == slaves[i].slaveID && req.address == slaves[i].address && req.quantity_value == slaves[i].quantity && req.functionCode == slaves[i].functionCode) {
             if (index < slaves[i].quantity) {
@@ -87,14 +68,16 @@ void setup() {
 
     if(xModbusDataMutex == NULL || xModbusRTUMutex == NULL) while(1);
 
+    rtuThreadLock.init(xModbusRTUMutex); 
+
     // 2. Instanciar el Lock pasándole el Semáforo de FreeRTOS real
-    rtuThreadLock = new FreeRtosModbusLock(xModbusRTUMutex);
+    //rtuThreadLock = new FreeRtosModbusLock(xModbusRTUMutex); // TODO , no me gusta en memoria dinamica
 
     RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
     ModbusRTUClient.begin(_baudrate, (uint16_t)SERIAL_8N1);
 
     // 3. Vincular dinámicamente el Lock y el Interceptor al objeto global estable
-    modbusTcpBridge.setThreadLock(rtuThreadLock); 
+    modbusTcpBridge.setThreadLock(&rtuThreadLock); 
     modbusTcpBridge.setInterceptor(checkTCPReqCallback);
     modbusTcpBridge.begin(mac, ip);
 
@@ -155,19 +138,18 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     uint16_t aux_data[2] = {0, 0};
     bool lecturaExitosa = false;
 
-    if (rtuThreadLock != nullptr) {
-        rtuThreadLock->lock(); // Sincronización a través de la interfaz abstracta común
-        
-        int dataType = ModbusTcpBridge::getModbusClientDataType(slave->functionCode);
-        
-        if(ModbusRTUClient.requestFrom(slave->slaveID, dataType, slave->address, slave->quantity)){
-            for (int j = 0; j < slave->quantity; j++) {
-                aux_data[j] = ModbusRTUClient.read();  
-            }
-            lecturaExitosa = true;
+    // Sincronización directa usando el objeto (eliminado el check de nullptr)
+    rtuThreadLock.lock(); // <--- Cambiado -> por .
+    
+    int dataType = ModbusTcpBridge::getModbusClientDataType(slave->functionCode);
+    
+    if(ModbusRTUClient.requestFrom(slave->slaveID, dataType, slave->address, slave->quantity)){
+        for (int j = 0; j < slave->quantity; j++) {
+            aux_data[j] = ModbusRTUClient.read();  
         }
-        rtuThreadLock->unlock(); 
+        lecturaExitosa = true;
     }
+    rtuThreadLock.unlock(); // <--- Cambiado -> por .
 
     if (lecturaExitosa) {
         if (xSemaphoreTake(xModbusDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
