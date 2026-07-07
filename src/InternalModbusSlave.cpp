@@ -4,32 +4,23 @@
 InternalModbusSlave esclavo10;
 
 // Definición fija de pines para el Weidos ESP32 A1
-static const uint8_t NUM_COILS = 4;
-static const uint32_t pinCoils[NUM_COILS] = {DO_0, DO_1, DO_2, DO_3}; // Salidas digitales
-
-static const uint8_t NUM_DISCRETE = 4;
-static const uint32_t pinDiscreteInputs[NUM_DISCRETE] = {DI_4, DI_5, DI_6, DI_7}; // Entradas digitales
-
-static const uint8_t NUM_INPUT_REGS = 4;
-static const uint32_t pinInputRegisters[NUM_INPUT_REGS] = {ADI_0, ADI_1, ADI_2, ADI_3}; // Entradas analógicas híbridas
-
-static const uint8_t NUM_HOLDING_REGS = 1;
-static const uint32_t pinHoldingRegisters[NUM_HOLDING_REGS] = {AO_0}; // Salida analógica
-
-static const uint16_t VOLTAGE_RESOLUTION = 1023;
+const uint32_t InternalModbusSlave::pinCoils[NUM_COILS] = {DO_0, DO_1, DO_2, DO_3};
+const uint32_t InternalModbusSlave::pinDiscreteInputs[NUM_DISCRETE] = {DI_4, DI_5, DI_6, DI_7};
+const uint32_t InternalModbusSlave::pinInputRegisters[NUM_INPUT_REGS] = {ADI_0, ADI_1, ADI_2, ADI_3};
+const uint32_t InternalModbusSlave::pinHoldingRegisters[NUM_HOLDING_REGS] = {AO_0};
 
 InternalModbusSlave::InternalModbusSlave() : _mapping(nullptr) {}
 
 InternalModbusSlave::~InternalModbusSlave() {
     if (_mapping != nullptr) {
-        modbus_mapping_free(_mapping);
+        modbus_mapping_free(_mapping); //liberacion de memoria dinamica
     }
 }
 
 // Inicializa los 4 bloques de memoria y configura los pines físicos
-bool InternalModbusSlave::begin(int nb_coils, int nb_discrete, int nb_holding, int nb_input) {
+bool InternalModbusSlave::begin() {
     
-    _mapping = modbus_mapping_new(nb_coils, nb_discrete, nb_holding, nb_input);
+    _mapping = modbus_mapping_new(NUM_COILS, NUM_DISCRETE, NUM_HOLDING_REGS, NUM_INPUT_REGS);
     if (_mapping == nullptr) return false;
 
     // Configuración inicial de hardware (Dirección de pines)
@@ -42,65 +33,111 @@ bool InternalModbusSlave::begin(int nb_coils, int nb_discrete, int nb_holding, i
     for (int i = 0; i < NUM_HOLDING_REGS; i++) {
         pinMode(pinHoldingRegisters[i], OUTPUT);
     }
-    // Nota: los pines analógicos de entrada no requieren pinMode(INPUT) estricto en ESP32
-
-    // --- VALORES INICIALES POR DEFECTO PARA PRUEBAS ---
-    // Inicializamos a cero las salidas y hacemos una lectura inicial de entradas
+    
+    // Inicializar registros espejo a 0
+    memset(_shadowCoils, 0, sizeof(_shadowCoils));
+    memset(_shadowHoldingRegs, 0, sizeof(_shadowHoldingRegs));
+    
     updatePhysicalIO();
 
     return true;
 }
 
-// SINCRONIZACIÓN EN TIEMPO REAL ENTRE HARDWARE Y MEMORIA MODBUS
 void InternalModbusSlave::updatePhysicalIO() {
     if (!_mapping) return;
 
-    // 1. Leer Entradas Digitales Físicas -> Guardar en Discrete Inputs (0x02)
+    // 1. Leer Entradas Digitales Físicas -> Guardar en Discrete Inputs
     for (int i = 0; i < NUM_DISCRETE && i < _mapping->nb_input_bits; i++) {
         _mapping->tab_input_bits[i] = digitalRead(pinDiscreteInputs[i]);
     }
 
-    // 2. Leer Entradas Analógicas Físicas -> Guardar en Input Registers (0x04)
+    // 2. Leer Entradas Analógicas Físicas -> Guardar en Input Registers
     for (int i = 0; i < NUM_INPUT_REGS && i < _mapping->nb_input_registers; i++) {
         _mapping->tab_input_registers[i] = analogRead(pinInputRegisters[i]);
     }
 
-    // 3. Leer de Memoria Coils Modbus -> Escribir en Salidas Digitales Físicas (0x01 / 0x05 / 0x0F)
+    // 3. Sincronización BIDIRECCIONAL Inteligente de Coils (Salidas)
     for (int i = 0; i < NUM_COILS && i < _mapping->nb_bits; i++) {
-        digitalWrite(pinCoils[i], _mapping->tab_bits[i] ? HIGH : LOW);
+        uint8_t currentModbusValue = _mapping->tab_bits[i];
+
+        if (currentModbusValue != _shadowCoils[i]) {
+            // Caso A: Modbus cambió el valor (Prioridad alta por red)
+            digitalWrite(pinCoils[i], currentModbusValue ? HIGH : LOW);
+            _shadowCoils[i] = currentModbusValue; // Sincronizar espejo
+        } else {
+            // Caso B: Modbus no ha cambiado. Verificamos si cambió por código local/HW
+            uint8_t currentHwValue = digitalRead(pinCoils[i]);
+            if (currentHwValue != _shadowCoils[i]) {
+                _mapping->tab_bits[i] = currentHwValue; // Actualizar Modbus
+                _shadowCoils[i] = currentHwValue;       // Sincronizar espejo
+            }
+        }
     }
 
-    // 4. Leer de Memoria Holding Regs Modbus -> Escribir en Salida Analógica Física (0x03 / 0x06 / 0x10)
+    // 4. Sincronización BIDIRECCIONAL Inteligente de Holding Registers (Salidas Analógicas)
     for (int i = 0; i < NUM_HOLDING_REGS && i < _mapping->nb_registers; i++) {
-        uint16_t val = _mapping->tab_registers[i];
-        if (val > VOLTAGE_RESOLUTION) val = VOLTAGE_RESOLUTION;
-        analogWrite(pinHoldingRegisters[i], val);
+        uint16_t currentModbusValue = _mapping->tab_registers[i];
+        if (currentModbusValue > VOLTAGE_RESOLUTION) currentModbusValue = VOLTAGE_RESOLUTION;
+
+        if (currentModbusValue != _shadowHoldingRegs[i]) {
+            // Caso A: Modbus cambió el registro
+            analogWrite(pinHoldingRegisters[i], currentModbusValue);
+            _shadowHoldingRegs[i] = currentModbusValue;
+
+        } else { // TODO: problemas, no podemos leer facilmente un analogOutput
+            // Caso B: Modbus no ha cambiado. Verificamos si cambió por código local/HW
+           // uint16_t currentHwValue = analogRead(pinHoldingRegisters[i]);
+           // if (currentHwValue != _shadowHoldingRegs[i]) {
+           //     _mapping->tab_registers[i] = currentHwValue; // Actualizar Modbus
+           //     _shadowHoldingRegs[i] = currentHwValue;       // Sincronizar espejo
+           // }
+        }
     }
 }
 
 // Métodos de lectura y escritura de registros internos (Sin cambios)
-uint8_t InternalModbusSlave::coilRead(int address) { 
-    return _mapping ? _mapping->tab_bits[address] : 0; 
+uint8_t InternalModbusSlave::readCoil(int address) { 
+    if (!_mapping || address < 0 || address >= _mapping->nb_bits) {
+        return 0; // Dirección fuera de rango o mapa no inicializado
+    }
+    return _mapping->tab_bits[address]; 
 }
 
-uint8_t InternalModbusSlave::discreteInputRead(int address) { 
-    return _mapping ? _mapping->tab_input_bits[address] : 0; 
+uint8_t InternalModbusSlave::readDiscreteInput(int address) { 
+    if (!_mapping || address < 0 || address >= _mapping->nb_input_bits) {
+        return 0; 
+    }
+    return _mapping->tab_input_bits[address]; 
 }
 
-uint16_t InternalModbusSlave::holdingRegisterRead(int address) {
-     return _mapping ? _mapping->tab_registers[address] : 0; 
+uint16_t InternalModbusSlave::readHoldingRegister(int address) {
+    if (!_mapping || address < 0 || address >= _mapping->nb_registers) {
+        return 0; 
+    }
+    return _mapping->tab_registers[address]; 
 }
 
-uint16_t InternalModbusSlave::inputRegisterRead(int address) { 
-    return _mapping ? _mapping->tab_input_registers[address] : 0; 
+uint16_t InternalModbusSlave::readInputRegister(int address) { 
+    if (!_mapping || address < 0 || address >= _mapping->nb_input_registers) {
+        return 0; 
+    }
+    return _mapping->tab_input_registers[address]; 
 }
 
-void InternalModbusSlave::coilWrite(int address, bool value) { 
-    if (_mapping) _mapping->tab_bits[address] = value ? 1 : 0; 
+bool InternalModbusSlave::writeSinglecoil(int address, bool value) { 
+    if (!_mapping || address < 0 || address >= _mapping->nb_bits) {
+        return false; 
+    }
+    _mapping->tab_bits[address] = value ? 1 : 0;
+    return true;  
 }
 
-void InternalModbusSlave::holdingRegisterWrite(int address, uint16_t value) { 
-    if (_mapping) _mapping->tab_registers[address] = value; 
+bool InternalModbusSlave::writeSingleRegister(int address, uint16_t value) { 
+    if (!_mapping || address < 0 || address >= _mapping->nb_registers) {
+        return false; 
+    }
+    _mapping->tab_registers[address] = value; 
+    return true; 
 }
 
 

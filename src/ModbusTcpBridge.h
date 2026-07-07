@@ -4,7 +4,8 @@
 
 #include <Arduino.h>
 #include <Ethernet.h>
-#include <ModbusRTUClient.h>
+//#include <ModbusRTUClient.h>
+#include "IModbusClient.h"
 #include "IThreadLock.h" // Interfaz que permite entrada de un mutex generico para gestionar uso compartido de HW (rtuCLient)
 #include <functional>
 
@@ -35,7 +36,7 @@ typedef std::function<void(const modbusStruct& req, uint16_t index, uint16_t& va
 
 class ModbusTcpBridge {
 public:
-    ModbusTcpBridge(uint16_t port, ModbusRTUClientClass* rtuClient, IThreadLock* lock = nullptr); // recibe HW y mutex
+    ModbusTcpBridge(uint16_t port, IModbusClient* mbClient, IThreadLock* lock = nullptr); // recibe HW y mutex
     void begin(byte mac[], IPAddress ip);
     void process(); // Esta función se llamará repetidamente en el loop central
     static bool parseTCPBufferToStruct(const byte* tcp_buf, modbusStruct* out_struct);
@@ -51,7 +52,7 @@ private:
     uint16_t _port;
     WeidosEthernetServer _ethernetServer;  
     byte _modbusTcpBuffer[SIZE_MB_TCP_FRAME];
-    ModbusRTUClientClass* _rtuClient;
+    IModbusClient* _mbClient;
 
     IThreadLock* _lock;
     DummyLock _defaultLock; // en caso de nullptr , uso de por defecto
@@ -63,7 +64,6 @@ private:
     void sendTCPResponse(EthernetClient& client, const modbusStruct& req);
     void sendTCPException(EthernetClient& client, const modbusStruct& req, uint8_t exceptionCode);
 
-    
 };
 
 #endif

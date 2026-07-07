@@ -5,8 +5,8 @@
 
 static const char* TAG = "MB_TCP_BRDG";
 
-ModbusTcpBridge::ModbusTcpBridge(uint16_t port, ModbusRTUClientClass* rtuClient, IThreadLock* lock) 
-    : _port(port), _ethernetServer(port), _rtuClient(rtuClient) {
+ModbusTcpBridge::ModbusTcpBridge(uint16_t port, IModbusClient* mbClient, IThreadLock* lock) 
+    : _port(port), _ethernetServer(port), _mbClient(mbClient) {
         _lock = (lock != nullptr) ? lock : &_defaultLock; // si hay nullptr se usa el lock vacio
     }
 
@@ -63,7 +63,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         int errNoCopy = errno; 
         uint8_t exceptionCode = 0x04; // Slave Device Failure
 
-        ESP_LOGE(TAG, "Operación RTU fallida. Errno: %d, Texto: %s", errNoCopy, _rtuClient->lastError());
+        ESP_LOGE(TAG, "Operación RTU fallida. Errno: %d, Texto: %s", errNoCopy, _mbClient->lastError());
 
         if (errNoCopy == ETIMEDOUT || errNoCopy == 110) { 
             exceptionCode = 0x0A; // Gateway Path Unavailable
@@ -80,16 +80,16 @@ bool ModbusTcpBridge::processRtuCommand(const modbusStruct& mbData) {
     switch (mbData.functionCode) {
         case 0x05: { // Write Single Coil
             uint8_t coilValue = (mbData.quantity_value == 0xFF00) ? 1 : 0; 
-            return _rtuClient->coilWrite(mbData.slaveID, mbData.address, coilValue);
+            return _mbClient->coilWrite(mbData.slaveID, mbData.address, coilValue);
         }
 
         case 0x06: { // Write Single Register
             uint16_t registerValue = mbData.quantity_value;
-            return _rtuClient->holdingRegisterWrite(mbData.slaveID, mbData.address, registerValue);
+            return _mbClient->holdingRegisterWrite(mbData.slaveID, mbData.address, registerValue);
         }
 
         case 0x0F: { // FC 15: Write Multiple Coils
-            if (!_rtuClient->beginTransmission(mbData.slaveID, COILS, mbData.address, mbData.quantity_value)) {
+            if (!_mbClient->beginTransmission(mbData.slaveID, COILS, mbData.address, mbData.quantity_value)) {
                 return false;
             }
             int coilsWritten = 0;
@@ -100,32 +100,32 @@ bool ModbusTcpBridge::processRtuCommand(const modbusStruct& mbData) {
                 for (int bit = 0; bit < 8; bit++) {
                     if (coilsWritten < mbData.quantity_value) {
                         uint8_t bitValue = (currentByte >> bit) & 0x01;
-                        _rtuClient->write(bitValue);
+                        _mbClient->write(bitValue);
                         coilsWritten++;
                     } else {
                         break;
                     }
                 }
             }
-            return _rtuClient->endTransmission();
+            return _mbClient->endTransmission();
         }
 
         case 0x10: { // FC 16: Write Multiple Registers
-            if (!_rtuClient->beginTransmission(mbData.slaveID, HOLDING_REGISTERS, mbData.address, mbData.quantity_value)) {
+            if (!_mbClient->beginTransmission(mbData.slaveID, HOLDING_REGISTERS, mbData.address, mbData.quantity_value)) {
                 return false;
             }
             int tcpIndex = 13; 
             for (int i = 0; i < mbData.quantity_value; i++) {
                 uint16_t registerValue = (_modbusTcpBuffer[tcpIndex] << 8) | _modbusTcpBuffer[tcpIndex + 1];
-                _rtuClient->write(registerValue);
+                _mbClient->write(registerValue);
                 tcpIndex += 2; 
             }
-            return _rtuClient->endTransmission();
+            return _mbClient->endTransmission();
         }
 
         default: { // FCs de Lectura genéricos (0x01, 0x02, 0x03, 0x04, etc.)
             int dataType = getModbusClientDataType(mbData.functionCode); 
-            return _rtuClient->requestFrom(mbData.slaveID, dataType, mbData.address, mbData.quantity_value);
+            return _mbClient->requestFrom(mbData.slaveID, dataType, mbData.address, mbData.quantity_value);
         }
     }
 }
@@ -183,7 +183,7 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusStruct
             uint8_t currentByte = 0;
             for (int bit = 0; bit < 8; bit++) {
                 if (coilsRead < req.quantity_value) {
-                    uint8_t bitValue = (uint8_t)_rtuClient->read();
+                    uint8_t bitValue = (uint8_t)_mbClient->read();
                     if (bitValue == 1) {
                         currentByte |= (1 << bit);
                     }
@@ -196,7 +196,7 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusStruct
         }
     } else { 
         for (int i = 0; i < req.quantity_value; i++) {
-            uint16_t valorRegistro = (uint16_t)_rtuClient->read();
+            uint16_t valorRegistro = (uint16_t)_mbClient->read();
 
             if (_interceptor) { 
                 _interceptor(req, i, valorRegistro);

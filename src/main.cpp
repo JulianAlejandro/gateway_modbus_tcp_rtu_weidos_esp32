@@ -1,8 +1,73 @@
+/*
+#include <Arduino.h>
+#include "InternalModbusSlave.h"
+#include "ModbusInternalClient.h"
+
+// Instanciamos el cliente interno pasando la referencia de la instancia global 'esclavo10'
+ModbusInternalClient clienteInterno(&esclavo10);
+
+
+void setup() {
+    Serial.begin(115200);
+    while (!Serial) { delay(10); } // Esperar a la consola serial en plataformas nativas USB
+    
+    Serial.println("--- Iniciando Pruebas de ModbusInternalClient ---");
+
+    // 1. Inicializar el mapa de memoria del esclavo (4 coils, 4 discrete, 1 holding, 4 inputs)
+    if (esclavo10.begin()) {
+        Serial.println("[OK] Esclavo interno inicializado con éxito.");
+    } else {
+        Serial.println("[ERROR] No se pudo inicializar la memoria libmodbus.");
+        while (1); // Bloquear ejecución si falla
+    }
+
+    // Configuración manual del pin DI_4 como INPUT para testear Discrete Inputs físicamente si deseas
+    // (Aunque esclavo10.begin ya configura internamente los vectores estáticos correspondientes)
+}
+
+void loop() {
+    Serial.println("\n=== Ejecutando ciclo de prueba ===");
+
+    // =========================================================================
+    // TEST 1: Verificar Lectura de Coils (Salidas Digitales) modificadas por Software
+    // =========================================================================
+    Serial.println("\n[Test 1] Forzando Coil 0 a TRUE vía Software...");
+
+    esclavo10.writeSingleRegister(0, 512);
+    esclavo10.updatePhysicalIO(); 
+    int valorLeido = esclavo10.readHoldingRegister(0); 
+
+    Serial.printf("Resultado Test 1 -> Coil 0 leído a través del cliente: %d (Esperado: 1)\n", valorLeido);
+
+    delay(2000);
+
+    Serial.println("\n[Test 2] Forzando Coil 0 a FALSE vía Software...");
+
+    esclavo10.writeSingleRegister(0, 111);
+    esclavo10.updatePhysicalIO(); 
+    valorLeido = esclavo10.readHoldingRegister(0); 
+
+    Serial.printf("Resultado Test 2 -> Coil 0 leído a través del cliente: %d (Esperado: 0)\n", valorLeido);
+
+    delay(2000);
+
+    Serial.println("\n[Test 3] Forzando Coil 0 a TRUE vía hw...");
+
+    Serial.printf("Resultado Test 4 -> Coil 0 leído a través del cliente: %d (Esperado: 0)\n", valorLeido);
+
+
+    Serial.println("\n=================================");
+    delay(4000); // Esperar 4 segundos antes de repetir el bucle
+}
+*/
+
+
 #include <Arduino.h>
 #include "ModbusRTUClient.h"
 #include "ModbusTCPBridge.h"
 #include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
 #include "ModbusRtuLock.h"
+#include "ModbusRTUClientManager.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress ip(192, 168, 1, 150); 
@@ -13,7 +78,8 @@ uint32_t _baudrate = 9600;
 
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
-ModbusTcpBridge modbusTcpBridge(modbusPort, &ModbusRTUClient); 
+ModbusRtuClientManager mbRtuManager(&ModbusRTUClient);
+ModbusTcpBridge modbusTcpBridge(modbusPort, &mbRtuManager); 
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 SemaphoreHandle_t xModbusDataMutex = NULL;  
