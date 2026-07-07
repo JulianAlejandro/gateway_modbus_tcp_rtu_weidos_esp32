@@ -51,6 +51,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         //continue;
         return; 
     }
+    ESP_LOGI(TAG, "Hay un commando a procesar"); 
 
     // 2. Procesamiento RTU delegando a la nueva función modular
     _lock->lock(); 
@@ -58,6 +59,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
 
     // 3. Gestionar la Respuesta o la Excepción
     if (rtuSuccess) {
+        ESP_LOGI(TAG, "Comando procesado, enviamos la respuesta: "); 
         sendTCPResponse(client, mbData);
     } else {
         int errNoCopy = errno; 

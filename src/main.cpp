@@ -61,7 +61,7 @@ void loop() {
 }
 */
 
-
+/*
 #include <Arduino.h>
 #include "ModbusRTUClient.h"
 #include "ModbusTCPBridge.h"
@@ -228,13 +228,14 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     } 
     return lecturaExitosa; 
 }
-
+*/
 //----------------------------------PRUEBAS SOBRE EL GATEWAY ORIGINAL------------------------------
 
-/*
+
 
 #include <Arduino.h>
-#include "ModbusRTUClient.h"
+#include "ModbusInternalClient.h"
+#include "InternalModbusSlave.h"
 #include "ModbusTCPBridge.h"
 
 
@@ -247,13 +248,15 @@ uint16_t modbusPort = 502;
 uint32_t _baudrate = 9600; 
 
 //ModbusRTUClientManager slaveRtu(BAUDRATE);
-ModbusTcpBridge tcpBridge(modbusPort, &ModbusRTUClient); // es un modbus TCP bridge con multihilo y callbacks. 
+ModbusInternalClient internalClient(&esclavo10); 
+ModbusTcpBridge tcpBridge(modbusPort, &internalClient); // es un modbus TCP bridge con multihilo y callbacks. 
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 
 void modbusGatewayTask(void * pvParameters) {
     for(;;) {
         tcpBridge.process();
+        //esclavo10.updatePhysicalIO(); 
         vTaskDelay(pdMS_TO_TICKS(5)); 
     }
 }
@@ -263,10 +266,16 @@ void setup() {
   while(!Serial){}
 
   // configuracion inicial de RTU , RS485 , baudrate y 
-  RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
-  ModbusRTUClient.begin(_baudrate, (uint16_t)SERIAL_8N1);
+  //RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
+  //ModbusRTUClient.begin(_baudrate, (uint16_t)SERIAL_8N1);
 
   // inicializacion de Tcp bridge con mac e ip 
+  if (esclavo10.begin()) {
+      ESP_LOGI("MAIN", "Esclavo interno Modbus inicializado correctamente.");
+  } else {
+      ESP_LOGE("MAIN", "Error crítico al inicializar el esclavo interno.");
+  }
+
   tcpBridge.begin(mac, ip);
 
   xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
@@ -277,7 +286,7 @@ void setup() {
 void loop() {
   delay(100); 
 }
-*/
+
 /*
 //----------------codigo para hacer pruebas modbus independiente de gateway---------
 

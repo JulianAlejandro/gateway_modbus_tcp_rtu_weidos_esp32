@@ -97,35 +97,35 @@ void InternalModbusSlave::updatePhysicalIO() {
 
 // Métodos de lectura y escritura de registros internos (Sin cambios)
 uint8_t InternalModbusSlave::readCoil(int address) { 
-    if (!_mapping || address < 0 || address >= _mapping->nb_bits) {
+    if (!_mapping || address < 0 || address >= NUM_COILS) {
         return 0; // Dirección fuera de rango o mapa no inicializado
     }
     return _mapping->tab_bits[address]; 
 }
 
 uint8_t InternalModbusSlave::readDiscreteInput(int address) { 
-    if (!_mapping || address < 0 || address >= _mapping->nb_input_bits) {
+    if (!_mapping || address < 0 || address >= NUM_DISCRETE) {
         return 0; 
     }
     return _mapping->tab_input_bits[address]; 
 }
 
 uint16_t InternalModbusSlave::readHoldingRegister(int address) {
-    if (!_mapping || address < 0 || address >= _mapping->nb_registers) {
+    if (!_mapping || address < 0 || address >= NUM_HOLDING_REGS) {
         return 0; 
     }
     return _mapping->tab_registers[address]; 
 }
 
 uint16_t InternalModbusSlave::readInputRegister(int address) { 
-    if (!_mapping || address < 0 || address >= _mapping->nb_input_registers) {
+    if (!_mapping || address < 0 || address >= NUM_INPUT_REGS) {
         return 0; 
     }
     return _mapping->tab_input_registers[address]; 
 }
 
 bool InternalModbusSlave::writeSinglecoil(int address, bool value) { 
-    if (!_mapping || address < 0 || address >= _mapping->nb_bits) {
+    if (!_mapping || address < 0 || address >= NUM_COILS) {
         return false; 
     }
     _mapping->tab_bits[address] = value ? 1 : 0;
@@ -133,7 +133,7 @@ bool InternalModbusSlave::writeSinglecoil(int address, bool value) {
 }
 
 bool InternalModbusSlave::writeSingleRegister(int address, uint16_t value) { 
-    if (!_mapping || address < 0 || address >= _mapping->nb_registers) {
+    if (!_mapping || address < 0 || address >= NUM_HOLDING_REGS) {
         return false; 
     }
     _mapping->tab_registers[address] = value; 

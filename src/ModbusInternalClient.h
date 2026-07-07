@@ -4,7 +4,7 @@
 #include "IModbusClient.h"
 #include "InternalModbusSlave.h"
 
-class ModbusInternalClient : IModbusClient {
+class ModbusInternalClient : public IModbusClient {
 private:
     InternalModbusSlave* _slave;
     uint16_t _bufferRead[125]; // Buffer temporal para simular la cola de lectura

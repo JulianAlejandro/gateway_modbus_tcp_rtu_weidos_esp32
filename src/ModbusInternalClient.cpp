@@ -1,17 +1,21 @@
 #include "ModbusInternalClient.h"
+#include "esp_log.h"
+
+static const char* TAG = "MB_INT_CLIENT";
 
 ModbusInternalClient::ModbusInternalClient(InternalModbusSlave* slave) 
     : _slave(slave), _bufferIndex(0), _bufferLength(0), _writeIndex(0) {}
 
 bool ModbusInternalClient::coilWrite(uint8_t slaveID, int address, uint8_t value){
+    ESP_LOGD(TAG, "Solicitud de escritura de coil slave ID = %u , adress = %i , valor = %u \n", slaveID, address, value); 
     _slave->writeSinglecoil(address, value != 0);
-    //_slave->updatePhysicalIO(); // Sincroniza hardware inmediatamente
+    _slave->updatePhysicalIO(); // Sincroniza hardware inmediatamente
     return true;
 }
 
 bool ModbusInternalClient::holdingRegisterWrite(uint8_t slaveID, int address, uint16_t value){
     _slave->writeSingleRegister(address, value);
-    //_slave->updatePhysicalIO();
+    _slave->updatePhysicalIO();
     return true;
 }
 
@@ -34,12 +38,14 @@ void ModbusInternalClient::write(uint16_t value){
 }
 
 bool ModbusInternalClient::endTransmission(){
-    //_slave->updatePhysicalIO();
+    _slave->updatePhysicalIO();
     return true;
 }
 
 bool ModbusInternalClient::requestFrom(uint8_t slaveID, int dataType, int address, int quantity){
-    //_slave->updatePhysicalIO(); // Refrescar antes de leer
+
+     ESP_LOGD(TAG, "Solicitud de lectura slave ID = %u , dataType = %i , adress = %i ,  quantity = %i \n", slaveID, dataType, address, quantity); 
+    _slave->updatePhysicalIO(); // Refrescar antes de leer
     _bufferLength = quantity;
     _bufferIndex = 0;
 
