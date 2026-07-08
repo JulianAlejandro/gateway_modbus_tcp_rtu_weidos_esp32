@@ -77,9 +77,11 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         ESP_LOGE(TAG, "Operación RTU fallida. Errno: %d, Texto: %s", errNoCopy, _mbClient->lastError());
 
         if (errNoCopy == ETIMEDOUT || errNoCopy == 110) { 
-            exceptionCode = 0x0A; // Gateway Path Unavailable
+            exceptionCode = 0x0B; // el esclavo no esta respondiendo....gateway informa
         } else if (errNoCopy == EINVAL) {
             exceptionCode = 0x03; // Illegal Data Value
+        } else if (errNoCopy == 112345680){ // ilegal data adress
+            exceptionCode = 0x02; 
         }
         
         sendTCPException(client, mbData, exceptionCode);

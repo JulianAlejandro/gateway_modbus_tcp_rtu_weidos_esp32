@@ -36,7 +36,7 @@ bool ModbusInternalClient::beginTransmission(uint8_t slaveID, int dataType, int 
 
     if (address < 0 || (address + quantity) > maxCount) {
         ESP_LOGE(TAG, "Bloque de escritura fuera de rango. Inicio: %i, Cant: %i", address, quantity);
-        errno = EINVAL;
+        errno = 112345680;
         return false; 
     }
 
@@ -73,7 +73,7 @@ bool ModbusInternalClient::requestFrom(uint8_t slaveID, int dataType, int addres
 
     if (address < 0 || (address + quantity) > maxCount) {
         ESP_LOGE(TAG, "Petición de lectura fuera de rango en mapa de memoria interna.");
-        errno = EINVAL; 
+        errno = 112345680; 
         return false;   
     }
 
