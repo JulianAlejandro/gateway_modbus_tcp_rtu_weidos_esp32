@@ -49,7 +49,7 @@ public:
 };
 
 // Instancia global para tu ID 10
-extern InternalModbusSlave esclavo10;
+extern InternalModbusSlave internalSlaveID10;
 
 #endif
 

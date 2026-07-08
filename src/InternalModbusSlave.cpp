@@ -1,7 +1,7 @@
 #include "InternalModbusSlave.h"
 #include <Arduino.h> // Necesario para pinMode, digitalRead, analogRead, etc.
 
-InternalModbusSlave esclavo10;
+InternalModbusSlave internalSlaveID10;
 
 // Definición fija de pines para el Weidos ESP32 A1
 const uint32_t InternalModbusSlave::pinCoils[NUM_COILS] = {DO_0, DO_1, DO_2, DO_3};

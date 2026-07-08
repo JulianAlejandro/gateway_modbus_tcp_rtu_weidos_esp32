@@ -32,6 +32,7 @@ public:
 };
 
 // Pasamos el valor por referencia (uint16_t&) para permitir modificaciones al vuelo si fuera necesario
+typedef std::function<void(const modbusStruct& req)> ModbusTCPReqCallback; 
 typedef std::function<void(const modbusStruct& req, uint16_t index, uint16_t& value)> ModbusInterceptorCallback;
 
 class ModbusTcpBridge {
@@ -42,6 +43,10 @@ public:
     static bool parseTCPBufferToStruct(const byte* tcp_buf, modbusStruct* out_struct);
 
     void setInterceptor(ModbusInterceptorCallback callback) { _interceptor = callback; }
+    void setTCPReqCallback(ModbusTCPReqCallback callback) { _tcpReqCallback = callback;}
+
+    void setModbusClient(IModbusClient* mbClient); 
+
     static int getModbusClientDataType(uint8_t functionCode);
 
     void setThreadLock(IThreadLock* lock) { 
@@ -58,6 +63,7 @@ private:
     DummyLock _defaultLock; // en caso de nullptr , uso de por defecto
 
     ModbusInterceptorCallback _interceptor = nullptr;
+    ModbusTCPReqCallback _tcpReqCallback = nullptr; 
 
     void handleClient(EthernetClient& client);
     bool processRtuCommand(const modbusStruct& mbData);

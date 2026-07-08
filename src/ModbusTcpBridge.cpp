@@ -1,5 +1,3 @@
-
-
 #include "ModbusTcpBridge.h"
 #include "esp_log.h"
 
@@ -17,6 +15,7 @@ void ModbusTcpBridge::begin(byte mac[], IPAddress ip) {
 }
 
 void ModbusTcpBridge::process() {
+    
     EthernetClient client = _ethernetServer.available();
     if (client) {
         //Serial.println("\n[Modbus TCP] ¡Cliente conectado!");
@@ -54,6 +53,16 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
     ESP_LOGI(TAG, "Hay un commando a procesar"); 
 
     // 2. Procesamiento RTU delegando a la nueva función modular
+    if(_tcpReqCallback){
+        _tcpReqCallback(mbData); 
+    }
+
+    // en este callback damos la posibilidad de establecer un modbusClient
+    if(_mbClient == nullptr){
+        sendTCPException(client, mbData, 0x0A); // Gateway Path Unavailable 
+        return; // no se avanza mas...no se establecio un Cliente 
+    }
+    
     _lock->lock(); 
     bool rtuSuccess = processRtuCommand(mbData);
 
@@ -252,6 +261,14 @@ bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusStruct* 
   out_struct->quantity_value = (tcp_buf[10] << 8) | tcp_buf[11]; 
   
   return true;
+}
+
+void ModbusTcpBridge::setModbusClient(IModbusClient* mbClient){
+
+    //if(mbClient == nullptr) return; 
+
+    _mbClient = mbClient; 
+
 }
 
 int ModbusTcpBridge::getModbusClientDataType(uint8_t functionCode) {
