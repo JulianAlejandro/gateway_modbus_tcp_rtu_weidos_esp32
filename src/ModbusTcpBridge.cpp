@@ -64,10 +64,10 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
     }
     
     _lock->lock(); 
-    bool rtuSuccess = processRtuCommand(mbData);
+    bool success = processCommand(mbData);
 
     // 3. Gestionar la Respuesta o la Excepción
-    if (rtuSuccess) {
+    if (success) {
         ESP_LOGI(TAG, "Comando procesado, enviamos la respuesta: "); 
         sendTCPResponse(client, mbData);
     } else {
@@ -89,7 +89,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
     _lock->unlock();
 }
 
-bool ModbusTcpBridge::processRtuCommand(const modbusStruct& mbData) {
+bool ModbusTcpBridge::processCommand(const modbusStruct& mbData) {
     switch (mbData.functionCode) {
         case 0x05: { // Write Single Coil
             uint8_t coilValue = (mbData.quantity_value == 0xFF00) ? 1 : 0; 

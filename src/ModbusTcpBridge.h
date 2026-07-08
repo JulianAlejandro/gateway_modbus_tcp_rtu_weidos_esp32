@@ -4,7 +4,6 @@
 
 #include <Arduino.h>
 #include <Ethernet.h>
-//#include <ModbusRTUClient.h>
 #include "IModbusClient.h"
 #include "IThreadLock.h" // Interfaz que permite entrada de un mutex generico para gestionar uso compartido de HW (rtuCLient)
 #include <functional>
@@ -66,7 +65,7 @@ private:
     ModbusTCPReqCallback _tcpReqCallback = nullptr; 
 
     void handleClient(EthernetClient& client);
-    bool processRtuCommand(const modbusStruct& mbData);
+    bool processCommand(const modbusStruct& mbData);
     void sendTCPResponse(EthernetClient& client, const modbusStruct& req);
     void sendTCPException(EthernetClient& client, const modbusStruct& req, uint8_t exceptionCode);
 
