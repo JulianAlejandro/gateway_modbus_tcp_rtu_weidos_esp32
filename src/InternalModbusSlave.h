@@ -46,6 +46,11 @@ public:
     bool writeSingleRegister(int address, uint16_t value); // function code 0x06 
     
     ~InternalModbusSlave();
+
+    uint16_t getCoilsCount() const { return NUM_COILS; }
+    uint16_t getDiscreteInputsCount() const { return NUM_DISCRETE; }
+    uint16_t getInputRegistersCount() const { return NUM_INPUT_REGS; }
+    uint16_t getHoldingRegistersCount() const { return NUM_HOLDING_REGS; }
 };
 
 // Instancia global para tu ID 10
