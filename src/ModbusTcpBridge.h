@@ -1,4 +1,4 @@
-
+// TODO MODIFICACION EN EL MUTEX, ESTE DEBE IR LIGADO AL HW EXTERNO
 #ifndef MODBUS_TCP_BRIDGE_H
 #define MODBUS_TCP_BRIDGE_H
 
@@ -37,20 +37,17 @@ typedef std::function<void(const modbusStruct& req, uint16_t index, uint16_t& va
 class ModbusTcpBridge {
 public:
     ModbusTcpBridge(uint16_t port, IModbusClient* mbClient, IThreadLock* lock = nullptr); // recibe HW y mutex
-    void begin(byte mac[], IPAddress ip);
+    void begin(byte mac[], IPAddress ip, IPAddress dns, IPAddress gateway, IPAddress subnet);
     void process(); // Esta función se llamará repetidamente en el loop central
     static bool parseTCPBufferToStruct(const byte* tcp_buf, modbusStruct* out_struct);
 
     void setInterceptor(ModbusInterceptorCallback callback) { _interceptor = callback; }
     void setTCPReqCallback(ModbusTCPReqCallback callback) { _tcpReqCallback = callback;}
 
-    void setModbusClient(IModbusClient* mbClient); 
+    void setModbusClient(IModbusClient* mbClient);
+    void setThreadLock(IThreadLock* lock);  
 
     static int getModbusClientDataType(uint8_t functionCode);
-
-    void setThreadLock(IThreadLock* lock) { 
-        if (lock != nullptr) _lock = lock; 
-    }
 
 private:   
     uint16_t _port;

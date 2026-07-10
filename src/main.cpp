@@ -1,3 +1,4 @@
+/*
 #include <Arduino.h>
 
 #include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
@@ -12,8 +13,12 @@
 #include "ModbusTCPBridge.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-IPAddress ip(192, 168, 1, 150); 
+IPAddress ip(10, 88, 47, 213); 
 uint16_t modbusPort = 502;    
+
+IPAddress gateway(10, 88, 47, 201);    // Puerta de enlace (tu router/switch capa 3)
+IPAddress subnet(255, 255, 255, 0);  // Tu máscara de subred explícita
+IPAddress dns(10, 88, 47, 201);
 
 uint32_t _baudrate = 9600; 
 
@@ -45,11 +50,13 @@ void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave); 
 
-void checkTCPReqCallback(const modbusStruct& req) { // todo, quiza modificar este callback para que reciba directametne el puntero, y no necesariamente llamar a la funcion. 
-    if(req.slaveID == 10){
+void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como podemos mejorar el asunto de relacion entre HW y mutex 
+    if (req.slaveID == 10) {
         modbusTcpBridge.setModbusClient(&internalClient);
-    }else{
+        modbusTcpBridge.setThreadLock(nullptr); // El puente usará _defaultLock (DummyLock) automáticamente
+    } else {
         modbusTcpBridge.setModbusClient(&mbRtuManager); 
+        modbusTcpBridge.setThreadLock(&rtuThreadLock); // Bloquea el HW real
     }
 }
 
@@ -99,7 +106,7 @@ void setup() {
     modbusTcpBridge.setThreadLock(&rtuThreadLock); 
     modbusTcpBridge.setInterceptor(checkTCPDataCallback);
     modbusTcpBridge.setTCPReqCallback(checkTCPReqCallback);
-    modbusTcpBridge.begin(mac, ip);
+    modbusTcpBridge.begin(mac, ip, dns, gateway, subnet);
 
     xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
 
@@ -182,42 +189,53 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     } 
     return lecturaExitosa; 
 }
+*/
 
-//----------------------------------PRUEBAS SOBRE EL GATEWAY ORIGINAL------------------------------
+//----------------------------GATEWAY MODBUS TCP RT with internal Client id = 10------------------------------
 
-/*
 #include <Arduino.h>
-#include "ModbusInternalClient.h"
+#include <esp_task_wdt.h> 
+
+#include "ModbusRTUClient.h"
+#include "ModbusRTUClientManager.h"
+
 #include "InternalModbusSlave.h"
+#include "ModbusInternalClient.h"
+
 #include "ModbusTCPBridge.h"
 
-//#define BAUDRATE 9600
+//----------CONFIGURABLE GLOBAL VARS------------
 
+//Mosbus TCP vars
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-IPAddress ip(192, 168, 1, 150); 
-uint16_t modbusPort = 502;
+IPAddress ip(192, 168, 1, 150);
+IPAddress gateway(192, 168, 1, 1);    
+IPAddress subnet(255, 255, 255, 0);  
+IPAddress dns(192, 168, 1, 1);
 
-uint32_t _baudrate = 9600; 
+uint16_t modbusPort = 502;   
 
-//ModbusRTUClientManager slaveRtu(BAUDRATE);
+//modbus RTU vars
+uint32_t baudrate = 9600;
+int txPin = RS485_TX;  
+int dePin = RS485_DE;  
+int rePin = RS485_RE;
+uint16_t rtuClientConfig = (uint16_t)SERIAL_8N1; 
+
+//internal Client 
+const uint8_t internal_slave_id = 10;  
+//-------------------------------------------------
+
 ModbusInternalClient internalClient(&internalSlaveID10); 
-ModbusTcpBridge tcpBridge(modbusPort, &internalClient); // es un modbus TCP bridge con multihilo y callbacks. 
+ModbusRtuClientManager mbRtuClientManager(&ModbusRTUClient);
 
-TaskHandle_t ModbusGatewayTaskHandle = NULL;
+ModbusTcpBridge modbusTcpBridge(modbusPort, &mbRtuClientManager); 
 
-void checkTCPReqCallback(const modbusStruct& req) { // todo, quiza modificar este callback para que reciba directametne el puntero, y no necesariamente llamar a la funcion. 
-    if(req.slaveID == 10){
-        tcpBridge.setModbusClient(&internalClient);
-    }else{
-        tcpBridge.setModbusClient(nullptr); 
-    }
-}
-
-void modbusGatewayTask(void * pvParameters) {
-    for(;;) {
-        tcpBridge.process();
-        //esclavo10.updatePhysicalIO(); 
-        vTaskDelay(pdMS_TO_TICKS(5)); 
+void checkTCPReqCallback(const modbusStruct& req) { 
+    if (req.slaveID == internal_slave_id) {
+        modbusTcpBridge.setModbusClient(&internalClient);
+    } else {
+        modbusTcpBridge.setModbusClient(&mbRtuClientManager); 
     }
 }
 
@@ -225,26 +243,58 @@ void setup() {
   Serial.begin(115200);
   while(!Serial){}
 
-  // configuracion inicial de RTU , RS485 , baudrate y 
-  //RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
-  //ModbusRTUClient.begin(_baudrate, (uint16_t)SERIAL_8N1);
-
-  // inicializacion de Tcp bridge con mac e ip 
-  if (internalSlaveID10.begin()) {
-      ESP_LOGI("MAIN", "Esclavo interno Modbus inicializado correctamente.");
+  esp_err_t wdt_err = esp_task_wdt_init(4, true); 
+  
+  if (wdt_err == ESP_OK) {
+      // Suscribimos la tarea actual (el loop principal de Arduino) al Watchdog
+      esp_task_wdt_add(NULL); 
+      ESP_LOGI("MAIN", "Watchdog inicializado correctamente (4s).");
   } else {
-      ESP_LOGE("MAIN", "Error crítico al inicializar el esclavo interno.");
+      ESP_LOGE("MAIN", "Fallo al inicializar el Watchdog.");
   }
 
-  tcpBridge.setTCPReqCallback(checkTCPReqCallback); 
-  tcpBridge.begin(mac, ip);
+  RS485.setPins(txPin, dePin, rePin);
+ 
+  int intentosRTU = 0;
+  const int maxIntentos = 5;
+  bool rtuOk = false;
 
-  xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
+  while (intentosRTU < maxIntentos) {
+      // Alimentamos al Watchdog durante el bucle de inicio para que no se dispare aquí
+      esp_task_wdt_reset(); 
+
+      if (ModbusRTUClient.begin(baudrate, (uint32_t)rtuClientConfig)) {
+          rtuOk = true;
+          ESP_LOGI("MAIN", "ModbusRTUClient inicializado con éxito.");
+          break; // Salimos del bucle si arranca bien
+      }
+
+      intentosRTU++;
+      ESP_LOGW("MAIN", "Error al inicializar ModbusRTUClient. Intento %d/%d...", intentosRTU, maxIntentos);
+      delay(1000); // Esperamos 1 segundo antes de volver a intentar
+  }
+
+  // Si tras los intentos sigue fallando, aplicamos la acción drástica
+  if (!rtuOk) {
+      ESP_LOGE("MAIN", "¡HARDWARE CRÍTICO CAÍDO! ModbusRTUClient no responde de forma definitiva.");
+      ESP_LOGE("MAIN", "Reiniciando el sistema en 3 segundos...");
+      
+      delay(3000); // Margen para que el LOG se envíe por Serial antes de morir
+      ESP.restart(); // Reinicio forzado del ESP32
+  }
+
+  internalSlaveID10.begin();
+
+  modbusTcpBridge.setTCPReqCallback(checkTCPReqCallback);
+  modbusTcpBridge.begin(mac, ip, dns, gateway, subnet);
 
   delay(1000); 
 }
 
 void loop() {
-  delay(100); 
+    esp_task_wdt_reset();
+
+    modbusTcpBridge.process();   
+    vTaskDelay(pdMS_TO_TICKS(5)); 
 }
-*/
+

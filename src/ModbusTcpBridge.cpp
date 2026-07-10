@@ -8,9 +8,9 @@ ModbusTcpBridge::ModbusTcpBridge(uint16_t port, IModbusClient* mbClient, IThread
         _lock = (lock != nullptr) ? lock : &_defaultLock; // si hay nullptr se usa el lock vacio
     }
 
-void ModbusTcpBridge::begin(byte mac[], IPAddress ip) {
+void ModbusTcpBridge::begin(byte mac[], IPAddress ip, IPAddress dns, IPAddress gateway, IPAddress subnet) {
     Ethernet.init(ETHERNET_CS);
-    Ethernet.begin(mac, ip);
+    Ethernet.begin(mac, ip, dns, gateway, subnet);
     _ethernetServer.begin(_port); 
 }
 
@@ -267,10 +267,11 @@ bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusStruct* 
 
 void ModbusTcpBridge::setModbusClient(IModbusClient* mbClient){
 
-    //if(mbClient == nullptr) return; 
-
     _mbClient = mbClient; 
+}
 
+void ModbusTcpBridge::setThreadLock(IThreadLock* lock){
+    _lock = (lock != nullptr) ? lock : &_defaultLock; 
 }
 
 int ModbusTcpBridge::getModbusClientDataType(uint8_t functionCode) {
