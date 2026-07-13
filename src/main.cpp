@@ -1,4 +1,4 @@
-/*
+
 #include <Arduino.h>
 
 #include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
@@ -12,15 +12,25 @@
 
 #include "ModbusTCPBridge.h"
 
+//Mosbus TCP vars
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-IPAddress ip(10, 88, 47, 213); 
-uint16_t modbusPort = 502;    
+IPAddress ip(192, 168, 1, 150);
+IPAddress gateway(192, 168, 1, 1);    
+IPAddress subnet(255, 255, 255, 0);  
+IPAddress dns(192, 168, 1, 1);
 
-IPAddress gateway(10, 88, 47, 201);    // Puerta de enlace (tu router/switch capa 3)
-IPAddress subnet(255, 255, 255, 0);  // Tu máscara de subred explícita
-IPAddress dns(10, 88, 47, 201);
+uint16_t modbusPort = 502;   
 
-uint32_t _baudrate = 9600; 
+//modbus RTU vars
+uint32_t baudrate = 9600;
+int txPin = RS485_TX;  
+int dePin = RS485_DE;  
+int rePin = RS485_RE;
+uint16_t rtuClientConfig = (uint16_t)SERIAL_8N1; 
+
+//internal Client 
+const uint8_t internal_slave_id = 10;  
+//-------------------------------------------------
 
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
@@ -51,7 +61,7 @@ void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave); 
 
 void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como podemos mejorar el asunto de relacion entre HW y mutex 
-    if (req.slaveID == 10) {
+    if (req.slaveID == internal_slave_id) {
         modbusTcpBridge.setModbusClient(&internalClient);
         modbusTcpBridge.setThreadLock(nullptr); // El puente usará _defaultLock (DummyLock) automáticamente
     } else {
@@ -97,7 +107,7 @@ void setup() {
     //rtuThreadLock = new FreeRtosModbusLock(xModbusRTUMutex); // TODO , no me gusta en memoria dinamica
 
     RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
-    ModbusRTUClient.begin(_baudrate, (uint16_t)SERIAL_8N1);
+    ModbusRTUClient.begin(baudrate, (uint32_t)rtuClientConfig);
 
     internalSlaveID10.begin(); // inicializamos el mapa, quiza esto deberia ir en otro sitio. 
    
@@ -189,7 +199,7 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     } 
     return lecturaExitosa; 
 }
-*/
+/*
 
 //----------------------------GATEWAY MODBUS TCP RT with internal Client id = 10------------------------------
 
@@ -298,3 +308,4 @@ void loop() {
     vTaskDelay(pdMS_TO_TICKS(5)); 
 }
 
+*/
