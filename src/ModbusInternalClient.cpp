@@ -10,17 +10,17 @@ ModbusInternalClient::ModbusInternalClient(InternalModbusSlave* slave)
 bool ModbusInternalClient::coilWrite(uint8_t slaveID, int address, uint8_t value){
 
     if(!_slave->writeSinglecoil(address, value != 0)){
-        ESP_LOGE(TAG, "Escritura de Coil rechazada por el esclavo. Direccion: %i", address);
+        ESP_LOGE(TAG, "Coil write rejected by slave. Address: %i", address);
         errno = EINVAL;
         return false; 
     }
-    _slave->updatePhysicalIO(); // Sincroniza hardware inmediatamente
+    _slave->updatePhysicalIO(); // Synchronize hardware instantly
     return true;
 }
 
 bool ModbusInternalClient::holdingRegisterWrite(uint8_t slaveID, int address, uint16_t value){
     if (!_slave->writeSingleRegister(address, value)) {
-        ESP_LOGE(TAG, "Escritura de Register rechazada por el esclavo. Dirección: %i", address);
+        ESP_LOGE(TAG, "Register write rejected by slave. Address: %i", address);
         errno = EINVAL; 
         return false;
     }
@@ -35,8 +35,8 @@ bool ModbusInternalClient::beginTransmission(uint8_t slaveID, int dataType, int 
     else maxCount = _slave->getHoldingRegistersCount();
 
     if (address < 0 || (address + quantity) > maxCount) {
-        ESP_LOGE(TAG, "Bloque de escritura fuera de rango. Inicio: %i, Cant: %i", address, quantity);
-        errno = 112345680;
+        ESP_LOGE(TAG, "Write block out of range. Start: %i, Count: %i", address, quantity);
+        errno = CODE_ILEGAL_ADDRES;
         return false; 
     }
 
@@ -72,8 +72,8 @@ bool ModbusInternalClient::requestFrom(uint8_t slaveID, int dataType, int addres
     }
 
     if (address < 0 || (address + quantity) > maxCount) {
-        ESP_LOGE(TAG, "Petición de lectura fuera de rango en mapa de memoria interna.");
-        errno = 112345680; 
+        ESP_LOGE(TAG, "Read request out of range in internal memory map.");
+        errno = CODE_ILEGAL_ADDRES; 
         return false;   
     }
 
@@ -81,6 +81,7 @@ bool ModbusInternalClient::requestFrom(uint8_t slaveID, int dataType, int addres
     _bufferLength = quantity;
     _bufferIndex = 0;
 
+    // Stream memory contents directly into the local stream buffer array
     for (int i = 0; i < quantity; i++) {
         switch (dataType) {
             case COILS:           _bufferRead[i] = _slave->readCoil(address + i); break; 

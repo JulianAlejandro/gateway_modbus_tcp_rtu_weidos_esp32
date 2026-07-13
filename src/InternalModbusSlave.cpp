@@ -1,6 +1,8 @@
 #include "InternalModbusSlave.h"
 #include <Arduino.h> // Necesario para pinMode, digitalRead, analogRead, etc.
 
+static const char* TAG = "MB_INT_SLAVE";
+
 InternalModbusSlave internalSlaveID10;
 
 // Definición fija de pines para el Weidos ESP32 A1
@@ -21,7 +23,10 @@ InternalModbusSlave::~InternalModbusSlave() {
 bool InternalModbusSlave::begin() {
     
     _mapping = modbus_mapping_new(NUM_COILS, NUM_DISCRETE, NUM_HOLDING_REGS, NUM_INPUT_REGS);
-    if (_mapping == nullptr) return false;
+    if (_mapping == nullptr) {
+        ESP_LOGE(TAG, "Failed to allocate libmodbus mapping tables.");
+        return false;
+    }
 
     // Configuración inicial de hardware (Dirección de pines)
     for (int i = 0; i < NUM_COILS; i++) {
