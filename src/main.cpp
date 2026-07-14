@@ -1,7 +1,8 @@
 
 #include <Arduino.h>
 
-#include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
+//#include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
+#include "displayOLEDManager.h"
 
 #include "ModbusRtuLock.h"
 #include "ModbusRTUClient.h"
@@ -44,6 +45,8 @@ SemaphoreHandle_t xModbusRTUMutex = NULL;
 
 // Puntero para usar el wrapper del Lock tanto en el main como en el puente
 ModbusRtuLock rtuThreadLock;
+
+displayOLEDManager disp; 
 
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
@@ -120,7 +123,8 @@ void setup() {
 
     xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
 
-    initOLED(); 
+    //initOLED(); 
+    disp.initOLED(slaves, NUM_SLAVES, xModbusDataMutex); 
 
     for(int i = 0; i < NUM_SLAVES; i++ ){ 
         reqSlaveInternalClient(&slaves[i]); 
@@ -131,7 +135,8 @@ void setup() {
 
 void loop() {
     checkSlaveFlagsAndTimeouts();
-    updateOLED(); 
+    //updateOLED();
+    disp.updateOLED(); 
 }
 
 void checkSlaveFlagsAndTimeouts() {
