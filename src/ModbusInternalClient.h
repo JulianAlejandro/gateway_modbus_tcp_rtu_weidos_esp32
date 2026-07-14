@@ -4,8 +4,6 @@
 #include "IModbusClient.h"
 #include "InternalModbusSlave.h"
 
-#define CODE_ILEGAL_ADDRES 112345680
-
 /**
  * @class ModbusInternalClient
  * @brief Implementation of IModbusClient that bridges queries directly into a local memory-mapped slave.

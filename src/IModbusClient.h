@@ -4,6 +4,11 @@
 #include <Arduino.h>
 #include "ArduinoModbus.h"
 
+#define CODE_ILEGAL_ADDRES 112345680
+#define ILEGAL_DATA_VALUE 0x03; // Illegal Data Value
+#define SLAVE_DEVICE_FAILURE 0x04; // Default: Slave Device Failure
+//#define GATEWAY_TARGET_DEVICE_FAILED //Gateway Target Device Failed to Respond
+
 /**
  * @class IModbusClient
  * @brief Interface abstraction for Modbus client operations.
