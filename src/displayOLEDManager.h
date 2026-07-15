@@ -40,13 +40,6 @@ enum DisplayState {
   RENDERING_PAGES
 };
 
-// Declaración externa del array y mutex que viven en el main
-//extern ModbusSlaveData slaves[];
-//extern const uint8_t NUM_SLAVES;
-//extern SemaphoreHandle_t xModbusDataMutex;
-
-// Puntero global de la pantalla
-//xtern U8G2 *u8g2;
 
 class displayOLEDManager{
 private: 

@@ -6,7 +6,7 @@
 
 #include "ModbusRtuLock.h"
 #include "ModbusRTUClient.h"
-#include "ModbusRTUClientManager.h"
+#include "ModbusRTUClientWrapper.h"
 
 #include "ModbusInternalClient.h"
 #include "InternalModbusSlave.h"
@@ -36,8 +36,8 @@ const uint8_t internal_slave_id = 10;
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
 ModbusInternalClient internalClient(&internalSlaveID10); 
-ModbusRtuClientManager mbRtuManager(&ModbusRTUClient);
-ModbusTcpBridge modbusTcpBridge(modbusPort, &mbRtuManager); 
+ModbusRtuClient mbRtu(&ModbusRTUClient);
+ModbusTcpBridge modbusTcpBridge(modbusPort, &mbRtu); 
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 SemaphoreHandle_t xModbusDataMutex = NULL;  
@@ -50,11 +50,11 @@ displayOLEDManager disp;
 
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
-    { "CL2",  "ppm",  3,        1,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,         false,    0},
-    { "COND", "us",   1,        2,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,         false,    0},
-    { "REDOX","mV",   1,        3,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,         false,    0},
-    { "TURB", "NTU",  3,        4,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,         false,    0},
-    { "PH",   "pH",   2,        5,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,         false,    0}
+    { "CL2",  "ppm",  3,        1,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
+    { "COND", "us",   1,        2,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
+    { "REDOX","mV",   1,        3,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
+    { "TURB", "NTU",  3,        4,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
+    { "PH",   "pH",   2,        5,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0}
 };
 
 const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
@@ -68,7 +68,7 @@ void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como pode
         modbusTcpBridge.setModbusClient(&internalClient);
         modbusTcpBridge.setThreadLock(nullptr); // El puente usará _defaultLock (DummyLock) automáticamente
     } else {
-        modbusTcpBridge.setModbusClient(&mbRtuManager); 
+        modbusTcpBridge.setModbusClient(&mbRtu); 
         modbusTcpBridge.setThreadLock(&rtuThreadLock); // Bloquea el HW real
     }
 }

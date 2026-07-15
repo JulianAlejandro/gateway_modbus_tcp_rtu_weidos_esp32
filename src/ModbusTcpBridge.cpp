@@ -181,20 +181,27 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
  * @brief Routes the Modbus request to the physical RTU hardware client.
  * @return true if the RTU transaction succeeded, false otherwise.
  */
+/**
+ * @brief Routes the Modbus request to the physical RTU hardware client.
+ * @return true if the RTU transaction succeeded, false otherwise.
+ */
 bool ModbusTcpBridge::processCommand(const modbusStruct& mbData) {
     switch (mbData.functionCode) {
         case 0x05: { // Write Single Coil
             uint8_t coilValue = (mbData.quantity_value == 0xFF00) ? 1 : 0; 
-            return _mbClient->coilWrite(mbData.slaveID, mbData.address, coilValue);
+            // coilWrite devuelve 1 (éxito) o 0 (fallo)
+            return (_mbClient->coilWrite(mbData.slaveID, mbData.address, coilValue) == 1);
         }
 
         case 0x06: { // Write Single Register
             uint16_t registerValue = mbData.quantity_value;
-            return _mbClient->holdingRegisterWrite(mbData.slaveID, mbData.address, registerValue);
+            // holdingRegisterWrite devuelve 1 (éxito) o 0 (fallo)
+            return (_mbClient->holdingRegisterWrite(mbData.slaveID, mbData.address, registerValue) == 1);
         }
 
         case 0x0F: { // FC 15: Write Multiple Coils
-            if (!_mbClient->beginTransmission(mbData.slaveID, COILS, mbData.address, mbData.quantity_value)) {
+            // beginTransmission devuelve 1 (éxito) o 0 (fallo)
+            if (_mbClient->beginTransmission(mbData.slaveID, COILS, mbData.address, mbData.quantity_value) != 1) {
                 return false;
             }
             int coilsWritten = 0;
@@ -212,11 +219,13 @@ bool ModbusTcpBridge::processCommand(const modbusStruct& mbData) {
                     }
                 }
             }
-            return _mbClient->endTransmission();
+            // endTransmission devuelve 1 (éxito) o 0 (fallo)
+            return (_mbClient->endTransmission() == 1);
         }
 
         case 0x10: { // FC 16: Write Multiple Registers
-            if (!_mbClient->beginTransmission(mbData.slaveID, HOLDING_REGISTERS, mbData.address, mbData.quantity_value)) {
+            // beginTransmission devuelve 1 (éxito) o 0 (fallo)
+            if (_mbClient->beginTransmission(mbData.slaveID, HOLDING_REGISTERS, mbData.address, mbData.quantity_value) != 1) {
                 return false;
             }
             int tcpIndex = 13; // Payload data starts at index 13
@@ -225,12 +234,15 @@ bool ModbusTcpBridge::processCommand(const modbusStruct& mbData) {
                 _mbClient->write(registerValue);
                 tcpIndex += 2; 
             }
-            return _mbClient->endTransmission();
+            // endTransmission devuelve 1 (éxito) o 0 (fallo)
+            return (_mbClient->endTransmission() == 1);
         }
 
         default: { // Generic Read Functions (0x01, 0x02, 0x03, 0x04)
             int dataType = getModbusClientDataType(mbData.functionCode); 
-            return _mbClient->requestFrom(mbData.slaveID, dataType, mbData.address, mbData.quantity_value);
+            // requestFrom devuelve la cantidad de registros leídos en caso de éxito (> 0) o 0 si falla.
+            int result = _mbClient->requestFrom(mbData.slaveID, dataType, mbData.address, mbData.quantity_value);
+            return (result > 0);
         }
     }
 }
@@ -238,10 +250,13 @@ bool ModbusTcpBridge::processCommand(const modbusStruct& mbData) {
 /**
  * @brief Constructs and sends a standard Modbus TCP response frame back to the client.
  */
+/**
+ * @brief Constructs and sends a standard Modbus TCP response frame back to the client.
+ */
 void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusStruct& req) {
 
     // Write commands (FC 05, 06, 15, 16) return an echo response
-    if (req.functionCode == 0x05 || req.functionCode == 0x06 ||  req.functionCode == 0x0F || req.functionCode == 0x10) { 
+    if (req.functionCode == 0x05 || req.functionCode == 0x06 || req.functionCode == 0x0F || req.functionCode == 0x10) { 
         uint16_t tcpLength = 6; // Unit ID (1) + FC (1) + Address (2) + Value/Quant (2)
 
         // 1. Send MBAP Header
@@ -294,9 +309,12 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusStruct
             uint8_t currentByte = 0;
             for (int bit = 0; bit < 8; bit++) {
                 if (coilsRead < req.quantity_value) {
-                    uint8_t bitValue = (uint8_t)_mbClient->read();
-                    if (bitValue == 1) {
-                        currentByte |= (1 << bit);
+                    long rawValue = _mbClient->read();
+                    if (rawValue != -1) { // Comprobación de seguridad contra fin de buffer o error
+                        uint8_t bitValue = (uint8_t)rawValue;
+                        if (bitValue == 1) {
+                            currentByte |= (1 << bit);
+                        }
                     }
                     coilsRead++;
                 } else {
@@ -307,7 +325,14 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusStruct
         }
     } else { 
         for (int i = 0; i < req.quantity_value; i++) {
-            uint16_t valorRegistro = (uint16_t)_mbClient->read();
+            long rawValue = _mbClient->read();
+            uint16_t valorRegistro = 0;
+
+            if (rawValue != -1) {
+                valorRegistro = (uint16_t)rawValue;
+            } else {
+                ESP_LOGE(TAG, "Read buffer underflow at register index: %d", i);
+            }
 
             // Trigger interceptor callback if registered (allows on-the-fly modifications)
             if (_interceptor) { 
