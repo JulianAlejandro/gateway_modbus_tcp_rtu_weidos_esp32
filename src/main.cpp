@@ -1,7 +1,106 @@
 
+
+
+
+/*
+#include <Arduino.h>
+#include <E2PROM.h>
+
+#define CONFIG_MAGIC_KEY 0x4D425331 // "MBS1" - Identificador único de validez
+
+// Estructura de configuración alineada
+struct SystemConfig {
+    uint32_t magic;           // Marcador para validar la configuración
+
+    // --- MODBUS TCP ---
+    uint8_t mac[6];
+    uint8_t ip[4];
+    uint8_t gateway[4];
+    uint8_t subnet[4];
+    uint8_t dns[4];
+    uint16_t modbusPort;
+
+    // --- MODBUS RTU ---
+    uint32_t baudrate;
+    int txPin;
+    int dePin;
+    int rePin;
+    uint16_t rtuClientConfig;
+
+    // --- INTERNAL SLAVE ---
+    uint8_t internal_slave_id;
+};
+
+// Configuración por defecto a escribir
+SystemConfig defaultConfig = {
+    .magic = CONFIG_MAGIC_KEY,
+    .mac = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED },
+    .ip = { 192, 168, 1, 150 },
+    .gateway = { 192, 168, 1, 1 },
+    .subnet = { 255, 255, 255, 0 },
+    .dns = { 192, 168, 1, 1 },
+    .modbusPort = 502,
+    
+    .baudrate = 9600,
+    .txPin = RS485_TX,  // Define las constantes de pines si no están cargadas por tu framework
+    .dePin = RS485_DE,
+    .rePin = RS485_RE,
+    .rtuClientConfig = (uint16_t)SERIAL_8N1,
+    
+    .internal_slave_id = 10
+};
+
+void printConfig(const SystemConfig& cfg) {
+    Serial.println("--- DATOS LEÍDOS DE LA EEPROM ---");
+    Serial.printf("Magic Key: 0x%X\n", cfg.magic);
+    Serial.printf("MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+                  cfg.mac[0], cfg.mac[1], cfg.mac[2], cfg.mac[3], cfg.mac[4], cfg.mac[5]);
+    Serial.printf("IP: %d.%d.%d.%d\n", cfg.ip[0], cfg.ip[1], cfg.ip[2], cfg.ip[3]);
+    Serial.printf("Gateway: %d.%d.%d.%d\n", cfg.gateway[0], cfg.gateway[1], cfg.gateway[2], cfg.gateway[3]);
+    Serial.printf("Subnet: %d.%d.%d.%d\n", cfg.subnet[0], cfg.subnet[1], cfg.subnet[2], cfg.subnet[3]);
+    Serial.printf("DNS: %d.%d.%d.%d\n", cfg.dns[0], cfg.dns[1], cfg.dns[2], cfg.dns[3]);
+    Serial.printf("Puerto Modbus TCP: %d\n", cfg.modbusPort);
+    Serial.printf("Baudrate RTU: %d\n", cfg.baudrate);
+    Serial.printf("Pines RTU (TX/DE/RE): %d / %d / %d\n", cfg.txPin, cfg.dePin, cfg.rePin);
+    Serial.printf("Internal Slave ID: %d\n", cfg.internal_slave_id);
+    Serial.println("---------------------------------");
+}
+
+void setup() {
+    Serial.begin(115200);
+    while (!Serial) {}
+    delay(2000);
+
+    Serial.println("\n[EEPROM WRITER] Inicializando EEPROM...");
+    E2PROM.begin();
+
+    // 1. Escribir la estructura completa
+    Serial.println("[EEPROM WRITER] Escribiendo configuración en la dirección 0...");
+    E2PROM.put(0, defaultConfig);
+
+    // 2. Leer los datos inmediatamente para verificar la grabación
+    SystemConfig readData;
+    E2PROM.get(0, readData);
+
+    // 3. Comprobar resultado
+    if (readData.magic == CONFIG_MAGIC_KEY) {
+        Serial.println("\n[ÉXITO] Configuración guardada y verificada correctamente.");
+        printConfig(readData);
+    } else {
+        Serial.println("\n[ERROR] Hubo un problema al escribir o leer la memoria.");
+    }
+}
+
+void loop() {
+    // El trabajo ya se completó en el setup
+    delay(5000);
+    Serial.println("[EEPROM WRITER] Datos guardados permanentemente. Ya puedes cargar el firmware principal.");
+}
+*/
+
+
 #include <Arduino.h>
 
-//#include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
 #include "displayOLEDManager.h"
 
 #include "ModbusRtuLock.h"
@@ -13,6 +112,9 @@
 
 #include "ModbusTCPBridge.h"
 
+#include "systemConfig.h"
+
+/*
 //Mosbus TCP vars
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress ip(192, 168, 1, 150);
@@ -32,12 +134,21 @@ uint16_t rtuClientConfig = (uint16_t)SERIAL_8N1;
 //internal Client 
 const uint8_t internal_slave_id = 10;  
 //-------------------------------------------------
+*/
+
+SystemConfig sysConfig;
+
+//Instancias de IP dinamicas
+IPAddress ip;
+IPAddress gateway;    
+IPAddress subnet;  
+IPAddress dns;
 
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
 ModbusInternalClient internalClient(&internalSlaveID10); 
 ModbusRtuClient mbRtu(&ModbusRTUClient);
-ModbusTcpBridge modbusTcpBridge(modbusPort, &mbRtu); 
+ModbusTcpBridge modbusTcpBridge(502, &mbRtu); 
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 SemaphoreHandle_t xModbusDataMutex = NULL;  
@@ -50,21 +161,22 @@ displayOLEDManager disp;
 
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
-    { "CL2",  "ppm",  3,        1,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
-    { "COND", "us",   1,        2,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
-    { "REDOX","mV",   1,        3,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
-    { "TURB", "NTU",  3,        4,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
-    { "PH",   "pH",   2,        5,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0}
+    { "CL2",       "ppm",    3,      1,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "COND",      "us",     1,      2,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "REDOX",     "mV",     1,      3,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "TURB",      "NTU",    3,      4,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "PH",        "pH",     2,      5,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0}
 };
 
 const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
 
 void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
-bool reqSlaveInternalClient(ModbusSlaveData* slave); 
+bool reqSlaveInternalClient(ModbusSlaveData* slave);
+void loadConfigurationFromEEPROM(); 
 
 void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como podemos mejorar el asunto de relacion entre HW y mutex 
-    if (req.slaveID == internal_slave_id) {
+    if (req.slaveID == sysConfig.internal_slave_id) {
         modbusTcpBridge.setModbusClient(&internalClient);
         modbusTcpBridge.setThreadLock(nullptr); // El puente usará _defaultLock (DummyLock) automáticamente
     } else {
@@ -98,6 +210,9 @@ void setup() {
     Serial.begin(115200);
     while(!Serial){}
 
+    //Cargar la configuracion desde la EEPRIM antes de iniciar los perifericos 
+    loadConfigurationFromEEPROM(); 
+
     // 1. Crear Semáforos primero
     xModbusDataMutex = xSemaphoreCreateMutex(); 
     xModbusRTUMutex = xSemaphoreCreateMutex(); 
@@ -110,7 +225,7 @@ void setup() {
     //rtuThreadLock = new FreeRtosModbusLock(xModbusRTUMutex); // TODO , no me gusta en memoria dinamica
 
     RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
-    ModbusRTUClient.begin(baudrate, (uint32_t)rtuClientConfig);
+    ModbusRTUClient.begin(sysConfig.baudrate, (uint32_t)sysConfig.rtuClientConfig);
 
     internalSlaveID10.begin(); // inicializamos el mapa, quiza esto deberia ir en otro sitio. 
    
@@ -119,7 +234,7 @@ void setup() {
     modbusTcpBridge.setThreadLock(&rtuThreadLock); 
     modbusTcpBridge.setInterceptor(checkTCPDataCallback);
     modbusTcpBridge.setTCPReqCallback(checkTCPReqCallback);
-    modbusTcpBridge.begin(mac, ip, dns, gateway, subnet);
+    modbusTcpBridge.begin(sysConfig.mac, ip, dns, gateway, subnet);
 
     xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
 
@@ -134,8 +249,7 @@ void setup() {
 }
 
 void loop() {
-    checkSlaveFlagsAndTimeouts();
-    //updateOLED();
+    checkSlaveFlagsAndTimeouts(); 
     disp.updateOLED(); 
 }
 
@@ -204,6 +318,28 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     } 
     return lecturaExitosa; 
 }
+
+void loadConfigurationFromEEPROM() {
+    E2PROM.begin();
+    E2PROM.get(0, sysConfig);
+
+    // Validación mediante Magic Key
+    if (sysConfig.magic != CONFIG_MAGIC_KEY) {
+        Serial.println("[ERROR EEPROM] Configuración no encontrada o corrupta. Bucle de seguridad activado.");
+        while(1) { delay(1000); } // Detenemos la ejecución si la EEPROM no tiene datos válidos
+    }
+
+    // Convertir los arreglos de bytes a objetos IPAddress
+    ip = IPAddress(sysConfig.ip);
+    gateway = IPAddress(sysConfig.gateway);
+    subnet = IPAddress(sysConfig.subnet);
+    dns = IPAddress(sysConfig.dns);
+
+    Serial.println("[EEPROM] Configuración cargada correctamente con éxito.");
+}
+
+
+
 /*
 
 //----------------------------GATEWAY MODBUS TCP RT with internal Client id = 10------------------------------
