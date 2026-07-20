@@ -114,35 +114,14 @@ void loop() {
 
 #include "systemConfig.h"
 
-/*
-//Mosbus TCP vars
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-IPAddress ip(192, 168, 1, 150);
-IPAddress gateway(192, 168, 1, 1);    
-IPAddress subnet(255, 255, 255, 0);  
-IPAddress dns(192, 168, 1, 1);
-
-uint16_t modbusPort = 502;   
-
-//modbus RTU vars
-uint32_t baudrate = 9600;
-int txPin = RS485_TX;  
-int dePin = RS485_DE;  
-int rePin = RS485_RE;
-uint16_t rtuClientConfig = (uint16_t)SERIAL_8N1; 
-
-//internal Client 
-const uint8_t internal_slave_id = 10;  
-//-------------------------------------------------
-*/
 
 SystemConfig sysConfig;
 
 //Instancias de IP dinamicas
-IPAddress ip;
-IPAddress gateway;    
-IPAddress subnet;  
-IPAddress dns;
+//IPAddress ip;
+//IPAddress gateway;    
+//IPAddress subnet;  
+//IPAddress dns;
 
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
@@ -173,7 +152,7 @@ const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
 void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave);
-void loadConfigurationFromEEPROM(); 
+SystemConfig loadConfigurationFromEEPROM();  
 
 void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como podemos mejorar el asunto de relacion entre HW y mutex 
     if (req.slaveID == sysConfig.internal_slave_id) {
@@ -211,7 +190,12 @@ void setup() {
     while(!Serial){}
 
     //Cargar la configuracion desde la EEPRIM antes de iniciar los perifericos 
-    loadConfigurationFromEEPROM(); 
+    sysConfig = loadConfigurationFromEEPROM(); 
+
+    IPAddress ip(sysConfig.ip);
+    IPAddress gateway(sysConfig.gateway);
+    IPAddress subnet(sysConfig.subnet);
+    IPAddress dns(sysConfig.dns);
 
     // 1. Crear Semáforos primero
     xModbusDataMutex = xSemaphoreCreateMutex(); 
@@ -319,23 +303,20 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     return lecturaExitosa; 
 }
 
-void loadConfigurationFromEEPROM() {
+SystemConfig loadConfigurationFromEEPROM() {
     E2PROM.begin();
-    E2PROM.get(0, sysConfig);
+    
+    SystemConfig config;
+    E2PROM.get(0, config);
 
     // Validación mediante Magic Key
-    if (sysConfig.magic != CONFIG_MAGIC_KEY) {
+    if (config.magic != CONFIG_MAGIC_KEY) {
         Serial.println("[ERROR EEPROM] Configuración no encontrada o corrupta. Bucle de seguridad activado.");
-        while(1) { delay(1000); } // Detenemos la ejecución si la EEPROM no tiene datos válidos
+        while(1) { delay(1000); } // Bloquea si la memoria no está correctamente inicializada
     }
 
-    // Convertir los arreglos de bytes a objetos IPAddress
-    ip = IPAddress(sysConfig.ip);
-    gateway = IPAddress(sysConfig.gateway);
-    subnet = IPAddress(sysConfig.subnet);
-    dns = IPAddress(sysConfig.dns);
-
-    Serial.println("[EEPROM] Configuración cargada correctamente con éxito.");
+    Serial.println("[EEPROM] Configuración cargada correctamente desde la EEPROM.");
+    return config;
 }
 
 
