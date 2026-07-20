@@ -1,24 +1,16 @@
-
-
+/*
 #include <Arduino.h>
 #include "SDManager.h"
-#include "SDSystemConfig.h"
-#include "systemConfig.h"
+#include "SystemConfig.h"
+//#include "systemConfig.h"
 
 // Objeto manejador de la tarjeta SD (ajusta si la inicialización en tu proyecto requiere parámetros)
 SDManager sdManager; 
 
-bool parseIP(const char* str, uint8_t out[4]);
-bool parseMAC(const char* str, uint8_t out[6]);
-uint16_t parseSerialConfig(const char* str);
-int parsePin(const char* str, int defaultPin);
-SystemConfig rawToSystemConfig(const SystemConfigRaw& raw); 
-void printConfig(const SystemConfig& cfg); 
-
 void setup() {
     Serial.begin(115200);
     while (!Serial) {} // Esperar puerto serie
-    delay(2000); 
+    delay(2000);
 
     // 1. Inicializar SIEMPRE la EEPROM al arrancar la aplicación
     E2PROM.begin();
@@ -27,10 +19,10 @@ void setup() {
     if (sdManager.begin() == ESP_OK) {
         Serial.println("[SD] Tarjeta detectada. Leyendo configuración...");
         
-        SystemConfigRaw configRaw = SDgetSystemConfig(&sdManager);
+        CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
         
         // Asignación directa a la variable existente (sin volver a declarar SystemConfig)
-        SystemConfig configFromSD = rawToSystemConfig(configRaw);
+        EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
         
         // Escribir en la EEPROM
         E2PROM.put(0, configFromSD);
@@ -40,7 +32,7 @@ void setup() {
     }
 
     // 3. Leer de la EEPROM (ahora es 100% seguro porque E2PROM.begin() ya se ejecutó)
-    SystemConfig readData; 
+    EEPROMSystemConfig readData; 
     E2PROM.get(0, readData); 
 
     // 4. Validar Magic Key
@@ -56,94 +48,9 @@ void loop() {
     // No se requiere ejecutar código periódico
     delay(5000);
 }
+*/
 
-
-// Función para parsear texto "192.168.1.150" a uint8_t[4]
-bool parseIP(const char* str, uint8_t out[4]) {
-    int a, b, c, d;
-    if (sscanf(str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4) {
-        out[0] = (uint8_t)a;
-        out[1] = (uint8_t)b;
-        out[2] = (uint8_t)c;
-        out[3] = (uint8_t)d;
-        return true;
-    }
-    return false;
-}
-
-// Función para parsear MAC "DE:AD:BE:EF:FE:ED" a uint8_t[6]
-bool parseMAC(const char* str, uint8_t out[6]) {
-    int m[6];
-    if (sscanf(str, "%x:%x:%x:%x:%x:%x", &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]) == 6) {
-        for(int i = 0; i < 6; i++) out[i] = (uint8_t)m[i];
-        return true;
-    }
-    return false;
-}
-
-// Mapeo de constantes de configuración Serial
-uint16_t parseSerialConfig(const char* str) {
-    if (strcmp(str, "SERIAL_8N1") == 0) return (uint16_t)SERIAL_8N1;
-    if (strcmp(str, "SERIAL_8E1") == 0) return (uint16_t)SERIAL_8E1;
-    if (strcmp(str, "SERIAL_8O1") == 0) return (uint16_t)SERIAL_8O1;
-    return (uint16_t)SERIAL_8N1; // Default
-}
-
-// Mapeo para pines (soporta tanto números como alias comunes)
-int parsePin(const char* str, int defaultPin) {
-    if (strcmp(str, "RS485_TX") == 0) return RS485_TX;
-    if (strcmp(str, "RS485_DE") == 0) return RS485_DE;
-    if (strcmp(str, "RS485_RE") == 0) return RS485_RE;
-    
-    // Si metieron un número como "17" o "22"
-    int pin = atoi(str);
-    return (pin != 0 || strcmp(str, "0") == 0) ? pin : defaultPin;
-}
-
-
-// CONVERSOR PRINCIPAL: SystemConfigRaw -> SystemConfig
-SystemConfig rawToSystemConfig(const SystemConfigRaw& raw) {
-    SystemConfig config;
-    config.magic = CONFIG_MAGIC_KEY;
-
-    // 1. Modbus TCP
-    parseMAC(raw.mac, config.mac);
-    parseIP(raw.ip, config.ip);
-    parseIP(raw.gateway, config.gateway);
-    parseIP(raw.subnet, config.subnet);
-    parseIP(raw.dns, config.dns);
-    config.modbusPort = (uint16_t)atoi(raw.port);
-
-    // 2. Modbus RTU
-    config.baudrate = (uint32_t)strtoul(raw.baudrate, NULL, 10);
-    config.txPin = parsePin(raw.txPin, RS485_TX);
-    config.dePin = parsePin(raw.dePin, RS485_DE);
-    config.rePin = parsePin(raw.rePin, RS485_RE);
-    config.rtuClientConfig = parseSerialConfig(raw.rtuConfig);
-
-    // 3. Slave Interno
-    config.internal_slave_id = (uint8_t)atoi(raw.internalSlaveId);
-
-    return config;
-}
-
-void printConfig(const SystemConfig& cfg) {
-    Serial.println("--- DATOS LEÍDOS DE LA EEPROM ---");
-    Serial.printf("Magic Key: 0x%X\n", cfg.magic);
-    Serial.printf("MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
-                  cfg.mac[0], cfg.mac[1], cfg.mac[2], cfg.mac[3], cfg.mac[4], cfg.mac[5]);
-    Serial.printf("IP: %d.%d.%d.%d\n", cfg.ip[0], cfg.ip[1], cfg.ip[2], cfg.ip[3]);
-    Serial.printf("Gateway: %d.%d.%d.%d\n", cfg.gateway[0], cfg.gateway[1], cfg.gateway[2], cfg.gateway[3]);
-    Serial.printf("Subnet: %d.%d.%d.%d\n", cfg.subnet[0], cfg.subnet[1], cfg.subnet[2], cfg.subnet[3]);
-    Serial.printf("DNS: %d.%d.%d.%d\n", cfg.dns[0], cfg.dns[1], cfg.dns[2], cfg.dns[3]);
-    Serial.printf("Puerto Modbus TCP: %d\n", cfg.modbusPort);
-    Serial.printf("Baudrate RTU: %d\n", cfg.baudrate);
-    Serial.printf("Pines RTU (TX/DE/RE): %d / %d / %d\n", cfg.txPin, cfg.dePin, cfg.rePin);
-    Serial.printf("Internal Slave ID: %d\n", cfg.internal_slave_id);
-    Serial.println("---------------------------------");
-}
-
-/*
+// ------EL OTRO PROGRAMA ABAJO---------
 #include <Arduino.h>
 
 #include "displayOLEDManager.h"
@@ -157,9 +64,11 @@ void printConfig(const SystemConfig& cfg) {
 
 #include "ModbusTCPBridge.h"
 
+#include "SDManager.h"
 #include "systemConfig.h"
 
-SystemConfig sysConfig;
+SDManager sdManager; 
+EEPROMSystemConfig sysConfig;
 
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
@@ -190,7 +99,7 @@ const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
 void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave);
-SystemConfig loadConfigurationFromEEPROM();  
+EEPROMSystemConfig loadConfigurationFromEEPROM();  
 
 void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como podemos mejorar el asunto de relacion entre HW y mutex 
     if (req.slaveID == sysConfig.internal_slave_id) {
@@ -228,6 +137,23 @@ void setup() {
     while(!Serial){}
 
     //Cargar la configuracion desde la EEPRIM antes de iniciar los perifericos 
+    E2PROM.begin(); 
+
+    if (sdManager.begin() == ESP_OK) {
+        Serial.println("[SD] Leyendo configuración...");
+        CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
+        EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
+        
+        // se carga en la eprom la configuracion desde la SD ( si existe la SD). 
+        E2PROM.put(0, configFromSD);
+        
+        // Cierra los archivos internamente en SDManager si no lo hace ya
+        //SD.end(); // Opcional: Libera formalmente el bus SD si no volverás a usarlo
+        //digitalWrite(SD_CS_PIN, HIGH); // Nos aseguramos de deshabilitar la SD
+        sdManager.end(); 
+        // pensar a ver si hay algun chip select que podamos deshabilidar.....
+    }
+
     sysConfig = loadConfigurationFromEEPROM(); 
 
     IPAddress ip(sysConfig.ip);
@@ -246,7 +172,7 @@ void setup() {
     // 2. Instanciar el Lock pasándole el Semáforo de FreeRTOS real
     //rtuThreadLock = new FreeRtosModbusLock(xModbusRTUMutex); // TODO , no me gusta en memoria dinamica
 
-    RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
+    RS485.setPins(RS485_TX, RS485_DE, RS485_RE); // TODO....
     ModbusRTUClient.begin(sysConfig.baudrate, (uint32_t)sysConfig.rtuClientConfig);
 
     internalSlaveID10.begin(); // inicializamos el mapa, quiza esto deberia ir en otro sitio. 
@@ -341,10 +267,10 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     return lecturaExitosa; 
 }
 
-SystemConfig loadConfigurationFromEEPROM() {
+EEPROMSystemConfig loadConfigurationFromEEPROM() {
     E2PROM.begin();
     
-    SystemConfig config;
+    EEPROMSystemConfig config;
     E2PROM.get(0, config);
 
     // Validación mediante Magic Key
@@ -357,7 +283,7 @@ SystemConfig loadConfigurationFromEEPROM() {
     return config;
 }
 
-*/
+
 
 
 /*
