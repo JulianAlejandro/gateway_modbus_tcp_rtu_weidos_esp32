@@ -1,54 +1,131 @@
 
 
-
-
-/*
 #include <Arduino.h>
-#include <E2PROM.h>
+#include "SDManager.h"
+#include "SDSystemConfig.h"
+#include "systemConfig.h"
 
-#define CONFIG_MAGIC_KEY 0x4D425331 // "MBS1" - Identificador único de validez
+// Objeto manejador de la tarjeta SD (ajusta si la inicialización en tu proyecto requiere parámetros)
+SDManager sdManager; 
 
-// Estructura de configuración alineada
-struct SystemConfig {
-    uint32_t magic;           // Marcador para validar la configuración
+bool parseIP(const char* str, uint8_t out[4]);
+bool parseMAC(const char* str, uint8_t out[6]);
+uint16_t parseSerialConfig(const char* str);
+int parsePin(const char* str, int defaultPin);
+SystemConfig rawToSystemConfig(const SystemConfigRaw& raw); 
+void printConfig(const SystemConfig& cfg); 
 
-    // --- MODBUS TCP ---
-    uint8_t mac[6];
-    uint8_t ip[4];
-    uint8_t gateway[4];
-    uint8_t subnet[4];
-    uint8_t dns[4];
-    uint16_t modbusPort;
+void setup() {
+    Serial.begin(115200);
+    while (!Serial) {} // Esperar puerto serie
+    delay(2000); 
 
-    // --- MODBUS RTU ---
-    uint32_t baudrate;
-    int txPin;
-    int dePin;
-    int rePin;
-    uint16_t rtuClientConfig;
+    // 1. Inicializar SIEMPRE la EEPROM al arrancar la aplicación
+    E2PROM.begin();
 
-    // --- INTERNAL SLAVE ---
-    uint8_t internal_slave_id;
-};
+    // 2. Intentar leer desde la SD
+    if (sdManager.begin() == ESP_OK) {
+        Serial.println("[SD] Tarjeta detectada. Leyendo configuración...");
+        
+        SystemConfigRaw configRaw = SDgetSystemConfig(&sdManager);
+        
+        // Asignación directa a la variable existente (sin volver a declarar SystemConfig)
+        SystemConfig configFromSD = rawToSystemConfig(configRaw);
+        
+        // Escribir en la EEPROM
+        E2PROM.put(0, configFromSD);
+        Serial.println("[SD] Configuración copiada a la EEPROM.");
+    } else {
+        Serial.println("[SD] No se pudo montar la SD. Se usará la configuración existente en EEPROM.");
+    }
 
-// Configuración por defecto a escribir
-SystemConfig defaultConfig = {
-    .magic = CONFIG_MAGIC_KEY,
-    .mac = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED },
-    .ip = { 192, 168, 1, 150 },
-    .gateway = { 192, 168, 1, 1 },
-    .subnet = { 255, 255, 255, 0 },
-    .dns = { 192, 168, 1, 1 },
-    .modbusPort = 502,
+    // 3. Leer de la EEPROM (ahora es 100% seguro porque E2PROM.begin() ya se ejecutó)
+    SystemConfig readData; 
+    E2PROM.get(0, readData); 
+
+    // 4. Validar Magic Key
+    if (readData.magic == CONFIG_MAGIC_KEY) {
+        Serial.println("\n[ÉXITO] Configuración cargada y verificada desde la EEPROM.");
+        printConfig(readData);
+    } else {
+        Serial.println("\n[ERROR] Configuración no válida en EEPROM (Magic Key incorrecta o memoria vacía).");
+    }
+}
+
+void loop() {
+    // No se requiere ejecutar código periódico
+    delay(5000);
+}
+
+
+// Función para parsear texto "192.168.1.150" a uint8_t[4]
+bool parseIP(const char* str, uint8_t out[4]) {
+    int a, b, c, d;
+    if (sscanf(str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4) {
+        out[0] = (uint8_t)a;
+        out[1] = (uint8_t)b;
+        out[2] = (uint8_t)c;
+        out[3] = (uint8_t)d;
+        return true;
+    }
+    return false;
+}
+
+// Función para parsear MAC "DE:AD:BE:EF:FE:ED" a uint8_t[6]
+bool parseMAC(const char* str, uint8_t out[6]) {
+    int m[6];
+    if (sscanf(str, "%x:%x:%x:%x:%x:%x", &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]) == 6) {
+        for(int i = 0; i < 6; i++) out[i] = (uint8_t)m[i];
+        return true;
+    }
+    return false;
+}
+
+// Mapeo de constantes de configuración Serial
+uint16_t parseSerialConfig(const char* str) {
+    if (strcmp(str, "SERIAL_8N1") == 0) return (uint16_t)SERIAL_8N1;
+    if (strcmp(str, "SERIAL_8E1") == 0) return (uint16_t)SERIAL_8E1;
+    if (strcmp(str, "SERIAL_8O1") == 0) return (uint16_t)SERIAL_8O1;
+    return (uint16_t)SERIAL_8N1; // Default
+}
+
+// Mapeo para pines (soporta tanto números como alias comunes)
+int parsePin(const char* str, int defaultPin) {
+    if (strcmp(str, "RS485_TX") == 0) return RS485_TX;
+    if (strcmp(str, "RS485_DE") == 0) return RS485_DE;
+    if (strcmp(str, "RS485_RE") == 0) return RS485_RE;
     
-    .baudrate = 9600,
-    .txPin = RS485_TX,  // Define las constantes de pines si no están cargadas por tu framework
-    .dePin = RS485_DE,
-    .rePin = RS485_RE,
-    .rtuClientConfig = (uint16_t)SERIAL_8N1,
-    
-    .internal_slave_id = 10
-};
+    // Si metieron un número como "17" o "22"
+    int pin = atoi(str);
+    return (pin != 0 || strcmp(str, "0") == 0) ? pin : defaultPin;
+}
+
+
+// CONVERSOR PRINCIPAL: SystemConfigRaw -> SystemConfig
+SystemConfig rawToSystemConfig(const SystemConfigRaw& raw) {
+    SystemConfig config;
+    config.magic = CONFIG_MAGIC_KEY;
+
+    // 1. Modbus TCP
+    parseMAC(raw.mac, config.mac);
+    parseIP(raw.ip, config.ip);
+    parseIP(raw.gateway, config.gateway);
+    parseIP(raw.subnet, config.subnet);
+    parseIP(raw.dns, config.dns);
+    config.modbusPort = (uint16_t)atoi(raw.port);
+
+    // 2. Modbus RTU
+    config.baudrate = (uint32_t)strtoul(raw.baudrate, NULL, 10);
+    config.txPin = parsePin(raw.txPin, RS485_TX);
+    config.dePin = parsePin(raw.dePin, RS485_DE);
+    config.rePin = parsePin(raw.rePin, RS485_RE);
+    config.rtuClientConfig = parseSerialConfig(raw.rtuConfig);
+
+    // 3. Slave Interno
+    config.internal_slave_id = (uint8_t)atoi(raw.internalSlaveId);
+
+    return config;
+}
 
 void printConfig(const SystemConfig& cfg) {
     Serial.println("--- DATOS LEÍDOS DE LA EEPROM ---");
@@ -66,39 +143,7 @@ void printConfig(const SystemConfig& cfg) {
     Serial.println("---------------------------------");
 }
 
-void setup() {
-    Serial.begin(115200);
-    while (!Serial) {}
-    delay(2000);
-
-    Serial.println("\n[EEPROM WRITER] Inicializando EEPROM...");
-    E2PROM.begin();
-
-    // 1. Escribir la estructura completa
-    Serial.println("[EEPROM WRITER] Escribiendo configuración en la dirección 0...");
-    E2PROM.put(0, defaultConfig);
-
-    // 2. Leer los datos inmediatamente para verificar la grabación
-    SystemConfig readData;
-    E2PROM.get(0, readData);
-
-    // 3. Comprobar resultado
-    if (readData.magic == CONFIG_MAGIC_KEY) {
-        Serial.println("\n[ÉXITO] Configuración guardada y verificada correctamente.");
-        printConfig(readData);
-    } else {
-        Serial.println("\n[ERROR] Hubo un problema al escribir o leer la memoria.");
-    }
-}
-
-void loop() {
-    // El trabajo ya se completó en el setup
-    delay(5000);
-    Serial.println("[EEPROM WRITER] Datos guardados permanentemente. Ya puedes cargar el firmware principal.");
-}
-*/
-
-
+/*
 #include <Arduino.h>
 
 #include "displayOLEDManager.h"
@@ -114,20 +159,13 @@ void loop() {
 
 #include "systemConfig.h"
 
-
 SystemConfig sysConfig;
-
-//Instancias de IP dinamicas
-//IPAddress ip;
-//IPAddress gateway;    
-//IPAddress subnet;  
-//IPAddress dns;
 
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
 ModbusInternalClient internalClient(&internalSlaveID10); 
 ModbusRtuClient mbRtu(&ModbusRTUClient);
-ModbusTcpBridge modbusTcpBridge(502, &mbRtu); 
+ModbusTcpBridge modbusTcpBridge(502, &mbRtu); // TODO este dato se debe tomar de sysConfig
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 SemaphoreHandle_t xModbusDataMutex = NULL;  
@@ -319,6 +357,7 @@ SystemConfig loadConfigurationFromEEPROM() {
     return config;
 }
 
+*/
 
 
 /*
