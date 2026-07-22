@@ -52,13 +52,14 @@ public:
      * @param mbClient Pointer to the Modbus RTU hardware backend.
      * @param lock Optional thread lock for shared hardware safety.
      */
-    ModbusTcpBridge(uint16_t port, IModbusClient* mbClient, IThreadLock* lock = nullptr); // recibe HW y mutex
+    ModbusTcpBridge(IModbusClient* mbClient, IThreadLock* lock = nullptr, uint16_t port = 502);
 
     /**
      * @brief Configures interface network parameters and starts the TCP server.
      */
-    void begin(byte mac[], IPAddress ip, IPAddress dns, IPAddress gateway, IPAddress subnet);
+    void begin(uint16_t port, byte mac[], IPAddress ip, IPAddress dns, IPAddress gateway, IPAddress subnet);
 
+    //void setPort(uint16_t port) { _port = port; }
     /**
      * @brief Non-blocking poller to check and handle client connections. Must be called in loop().
      */

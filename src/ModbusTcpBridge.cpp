@@ -9,20 +9,25 @@ static const char* TAG = "MB_TCP_BRDG";
  * @param mbClient Pointer to the Modbus RTU client interface.
  * @param lock Optional thread lock interface for shared hardware resource safety.
  */
-ModbusTcpBridge::ModbusTcpBridge(uint16_t port, IModbusClient* mbClient, IThreadLock* lock) 
+// Constructor actualizado
+ModbusTcpBridge::ModbusTcpBridge(IModbusClient* mbClient, IThreadLock* lock, uint16_t port) 
     : _port(port), _ethernetServer(port), _mbClient(mbClient) {
-        // Fallback to dummy lock if a nullptr is provided
         _lock = (lock != nullptr) ? lock : &_defaultLock; 
-    }
-
+}
 
 /**
  * @brief Initializes the Ethernet hardware and starts the TCP server.
  */
-void ModbusTcpBridge::begin(byte mac[], IPAddress ip, IPAddress dns, IPAddress gateway, IPAddress subnet) {
+
+void ModbusTcpBridge::begin(uint16_t port, byte mac[], IPAddress ip, IPAddress dns, IPAddress gateway, IPAddress subnet) {
+    _port = port; // Guardamos el puerto configurado dinámicamente
+    
     Ethernet.init(ETHERNET_CS);
     Ethernet.begin(mac, ip, dns, gateway, subnet);
+    
+    // Inicia el servidor Ethernet escuchando en el puerto pasado por parámetro
     _ethernetServer.begin(_port); 
+    ESP_LOGI(TAG, "Servidor Modbus TCP iniciado en el puerto: %d", _port);
 }
 
 /**

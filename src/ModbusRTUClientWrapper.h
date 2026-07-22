@@ -1,5 +1,5 @@
-#ifndef MODBUS_RTU_CLIENT_H
-#define MODBUS_RTU_CLIENT_H
+#ifndef MODBUS_RTU_CLIENT_WRAPPER_H
+#define MODBUS_RTU_CLIENT_WRAPPER_H
 
 #include "IModbusClient.h"
 #include <ModbusRTUClient.h>
@@ -10,7 +10,7 @@ private:
 
 public:
     ModbusRtuClient(ModbusRTUClientClass* rtu) : _rtu(rtu) {
-        _rtu->setTimeout(500);
+        //_rtu->setTimeout(500);
     }
 
     int coilRead(int id, int address){

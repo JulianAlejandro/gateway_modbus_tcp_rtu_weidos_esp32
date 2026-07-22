@@ -9,7 +9,7 @@
 #define CONFIG_MAGIC_KEY 0x4D425331 // "MBS1" - Clave para verificar si la EEPROM está inicializada
 
 /**
- * @struct SystemConfigRaw
+ * @struct CSVSystemConfig
  * @brief Estructura para almacenar en texto plano los parámetros leídos del CSV.
  */
 struct CSVSystemConfig {
@@ -27,6 +27,9 @@ struct CSVSystemConfig {
     char dePin[MAX_TEXT_SIZE];
     char rePin[MAX_TEXT_SIZE];
     char rtuConfig[MAX_TEXT_SIZE];
+    char interFrameDelay[MAX_TEXT_SIZE]; 
+    char responseTimeout[MAX_TEXT_SIZE]; 
+    char attempts[MAX_TEXT_SIZE];        
 
     // Internal Modbus Slave
     char internalSlaveId[MAX_TEXT_SIZE];
@@ -48,7 +51,10 @@ struct EEPROMSystemConfig {
     int txPin;
     int dePin;
     int rePin;
-    uint32_t rtuClientConfig;
+    uint32_t rtuClientConfig; 
+    uint32_t interFrameDelay; // Nuevo (ms)
+    uint32_t responseTimeout; // Nuevo (ms)
+    uint8_t attempts;         // Nuevo
 
     // --- INTERNAL SLAVE ---
     uint8_t internal_slave_id;

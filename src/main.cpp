@@ -52,6 +52,7 @@ void loop() {
 
 // ------EL OTRO PROGRAMA ABAJO---------
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 
 #include "displayOLEDManager.h"
 
@@ -67,14 +68,33 @@ void loop() {
 #include "SDManager.h"
 #include "systemConfig.h"
 
+static const char* TAG = "MAIN_APP";
+
 SDManager sdManager; 
 EEPROMSystemConfig sysConfig;
+
+const EEPROMSystemConfig DEFAULT_SYS_CONFIG = {
+    CONFIG_MAGIC_KEY,
+    {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}, // MAC
+    {192, 168, 1, 150},                  // IP
+    {192, 168, 1, 1},                    // Gateway
+    {255, 255, 255, 0},                  // Subnet
+    {192, 168, 1, 1},                    // DNS
+    502,                                 // Modbus TCP Port
+    9600,                                // Baudrate
+    17, 22, 23,                          // TX, DE, RE Pins
+    SERIAL_8N2,                          // Serial Config
+    250,                                 // Inter-frame delay
+    5000,                                // Response Timeout
+    3,                                   // Attempts
+    10                                   // Internal Slave ID
+};
 
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
 ModbusInternalClient internalClient(&internalSlaveID10); 
 ModbusRtuClient mbRtu(&ModbusRTUClient);
-ModbusTcpBridge modbusTcpBridge(502, &mbRtu); // TODO este dato se debe tomar de sysConfig
+ModbusTcpBridge modbusTcpBridge(&mbRtu); // pueto 502 por defecto. 
 
 TaskHandle_t ModbusGatewayTaskHandle = NULL;
 SemaphoreHandle_t xModbusDataMutex = NULL;  
@@ -82,7 +102,6 @@ SemaphoreHandle_t xModbusRTUMutex = NULL;
 
 // Puntero para usar el wrapper del Lock tanto en el main como en el puente
 ModbusRtuLock rtuThreadLock;
-
 displayOLEDManager disp; 
 
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
@@ -99,7 +118,7 @@ const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
 void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave);
-EEPROMSystemConfig loadConfigurationFromEEPROM();  
+bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg);  
 
 void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como podemos mejorar el asunto de relacion entre HW y mutex 
     if (req.slaveID == sysConfig.internal_slave_id) {
@@ -126,7 +145,10 @@ void checkTCPDataCallback(const modbusStruct& req, uint16_t index, uint16_t& val
 }
 
 void modbusGatewayTask(void * pvParameters) {
+    esp_task_wdt_add(NULL);
+
     for(;;) {
+        esp_task_wdt_reset();
         modbusTcpBridge.process();
         vTaskDelay(pdMS_TO_TICKS(1)); 
     }
@@ -136,25 +158,55 @@ void setup() {
     Serial.begin(115200);
     while(!Serial){}
 
-    //Cargar la configuracion desde la EEPRIM antes de iniciar los perifericos 
-    E2PROM.begin(); 
-
-    if (sdManager.begin() == ESP_OK) {
-        Serial.println("[SD] Leyendo configuración...");
-        CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
-        EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
-        
-        // se carga en la eprom la configuracion desde la SD ( si existe la SD). 
-        E2PROM.put(0, configFromSD);
-        
-        // Cierra los archivos internamente en SDManager si no lo hace ya
-        //SD.end(); // Opcional: Libera formalmente el bus SD si no volverás a usarlo
-        //digitalWrite(SD_CS_PIN, HIGH); // Nos aseguramos de deshabilitar la SD
-        sdManager.end(); 
-        // pensar a ver si hay algun chip select que podamos deshabilidar.....
+    esp_err_t wdt_err = esp_task_wdt_init(4, true); 
+    if (wdt_err == ESP_OK) {
+        esp_task_wdt_add(NULL); // Subscribir el hilo principal (setup / loop)
+        ESP_LOGI(TAG, "Watchdog inicializado correctamente (4s).");
+    } else {
+        ESP_LOGE(TAG, "Error crítico inicializando el Watchdog.");
     }
 
-    sysConfig = loadConfigurationFromEEPROM(); 
+    //Cargar la configuracion desde la EEPRIM antes de iniciar los perifericos 
+    E2PROM.begin(); 
+    bool loadedFromSD = false;
+
+    esp_task_wdt_reset();
+
+// 1. INTENTAR LECTURA DESDE TARJETA SD
+    if (sdManager.begin() == ESP_OK) {
+        // Verificar si el archivo de configuración existe
+        if (sdManager.exists(PARAM_FILE)) {
+            ESP_LOGI(TAG, "[SD] Archivo de configuración encontrado. Cargando...");
+            CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
+            EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
+
+            // Guardar la nueva configuración leída desde la SD en la EEPROM
+            E2PROM.put(0, configFromSD);
+            sysConfig = configFromSD;
+            loadedFromSD = true;
+            ESP_LOGI(TAG, "[SD -> EEPROM] Configuración guardada en EEPROM exitosamente.");
+        } else {
+            ESP_LOGW(TAG, "[SD] Advertencia: La tarjeta SD está montada pero no contiene %s", PARAM_FILE);
+        }
+        sdManager.end(); 
+    } else {
+        ESP_LOGW(TAG, "[SD] Tarjeta SD no detectada o fallo al montar.");
+    }
+
+    esp_task_wdt_reset();
+
+    // 2. SI NO SE CARGÓ DESDE SD, INTENTAR CARGAR DESDE EEPROM
+    if (!loadedFromSD) {
+        ESP_LOGI(TAG, "[EEPROM] Intentando cargar configuración desde EEPROM...");
+        if (!loadConfigurationFromEEPROM(sysConfig)) {
+            // 3. FALLBACK DE SEGURIDAD
+            ESP_LOGE(TAG, "[CRÍTICO] Fallo de SD y EEPROM inválida. Cargando valores por defecto (FLASH)...");
+            sysConfig = DEFAULT_SYS_CONFIG;
+            E2PROM.put(0, sysConfig); 
+        }
+    }
+    
+    printConfig(sysConfig); 
 
     IPAddress ip(sysConfig.ip);
     IPAddress gateway(sysConfig.gateway);
@@ -165,15 +217,23 @@ void setup() {
     xModbusDataMutex = xSemaphoreCreateMutex(); 
     xModbusRTUMutex = xSemaphoreCreateMutex(); 
 
-    if(xModbusDataMutex == NULL || xModbusRTUMutex == NULL) while(1);
+    if(xModbusDataMutex == NULL || xModbusRTUMutex == NULL) {
+        ESP_LOGE(TAG, "No se pudieron crear los semáforos.");
+        delay(1000); 
+        ESP.restart(); 
+    }
 
     rtuThreadLock.init(xModbusRTUMutex); 
 
-    // 2. Instanciar el Lock pasándole el Semáforo de FreeRTOS real
-    //rtuThreadLock = new FreeRtosModbusLock(xModbusRTUMutex); // TODO , no me gusta en memoria dinamica
+    // configuraciones RTU
+    
+    RS485.setPins(RS485_TX, RS485_DE, RS485_RE); // TODO.... esto hardcodeado
+    //RS485.setPins(sysConfig.txPin, sysConfig.dePin, sysConfig.rePin);
+    RS485.setDelays(sysConfig.interFrameDelay, sysConfig.interFrameDelay); 
 
-    RS485.setPins(RS485_TX, RS485_DE, RS485_RE); // TODO....
     ModbusRTUClient.begin(sysConfig.baudrate, (uint32_t)sysConfig.rtuClientConfig);
+    ModbusRTUClient.setTimeout(sysConfig.responseTimeout); 
+    //ModbusRTUClient.setDelays()
 
     internalSlaveID10.begin(); // inicializamos el mapa, quiza esto deberia ir en otro sitio. 
    
@@ -182,7 +242,7 @@ void setup() {
     modbusTcpBridge.setThreadLock(&rtuThreadLock); 
     modbusTcpBridge.setInterceptor(checkTCPDataCallback);
     modbusTcpBridge.setTCPReqCallback(checkTCPReqCallback);
-    modbusTcpBridge.begin(sysConfig.mac, ip, dns, gateway, subnet);
+    modbusTcpBridge.begin(sysConfig.modbusPort, sysConfig.mac, ip, dns, gateway, subnet);
 
     xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
 
@@ -193,10 +253,13 @@ void setup() {
         reqSlaveInternalClient(&slaves[i]); 
     }
 
+    esp_task_wdt_reset();
     delay(1000); 
 }
 
 void loop() {
+    esp_task_wdt_reset();
+
     checkSlaveFlagsAndTimeouts(); 
     disp.updateOLED(); 
 }
@@ -267,23 +330,22 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     return lecturaExitosa; 
 }
 
-EEPROMSystemConfig loadConfigurationFromEEPROM() {
+/**
+ * @brief Carga y valida la configuración almacenada en la EEPROM.
+ * @return true si la Magic Key es válida, false en caso contrario.
+ */
+bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg) {
     E2PROM.begin();
-    
-    EEPROMSystemConfig config;
-    E2PROM.get(0, config);
+    E2PROM.get(0, cfg);
 
-    // Validación mediante Magic Key
-    if (config.magic != CONFIG_MAGIC_KEY) {
-        Serial.println("[ERROR EEPROM] Configuración no encontrada o corrupta. Bucle de seguridad activado.");
-        while(1) { delay(1000); } // Bloquea si la memoria no está correctamente inicializada
+    if (cfg.magic != CONFIG_MAGIC_KEY) {
+        ESP_LOGE(TAG, "[ERROR EEPROM] Magic Key no coincide o datos corruptos.");
+        return false;
     }
 
-    Serial.println("[EEPROM] Configuración cargada correctamente desde la EEPROM.");
-    return config;
+    ESP_LOGI(TAG, "[EEPROM] Configuración cargada correctamente.");
+    return true;
 }
-
-
 
 
 /*
