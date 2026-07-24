@@ -70,7 +70,9 @@ void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave);
 bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg);   
 
-void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como podemos mejorar el asunto de relacion entre HW y mutex 
+// NOTE: Modifies _mbClient and _lock per-request. Safe because this callback
+// and all usage run sequentially in modbusGatewayTask with no preemption.
+void checkTCPReqCallback(const modbusStruct& req) {
     if (req.slaveID == sysConfig.internal_slave_id) {
         modbusTcpBridge.setModbusClient(&internalClient);
         modbusTcpBridge.setThreadLock(nullptr); // El puente usará _defaultLock (DummyLock) automáticamente

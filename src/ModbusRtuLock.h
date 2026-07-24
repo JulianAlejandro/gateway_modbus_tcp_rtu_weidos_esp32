@@ -13,13 +13,13 @@ public:
     
     void init(SemaphoreHandle_t mutex) { _mutex = mutex; } // Configurar tras crear el mutex
     
-    virtual void lock() override {
-        if (_mutex != NULL) {
+        void lock() override {
+            if (_mutex != NULL) {
             xSemaphoreTake(_mutex, portMAX_DELAY);
         }
     }
     
-    virtual void unlock() override {
+    void unlock() override {
         if (_mutex != NULL) {
             xSemaphoreGive(_mutex);
         }

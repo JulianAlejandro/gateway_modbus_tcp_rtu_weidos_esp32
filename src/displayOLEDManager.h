@@ -25,7 +25,7 @@ struct ModbusSlaveData {
 //variables    
     uint16_t rawBuffer[2];
     float convertedData;
-    volatile bool flagUpdate;
+    bool flagUpdate;
     unsigned long lastTimeReference;
    // bool disable; 
     bool isNew; 
@@ -61,7 +61,7 @@ public:
     // Funciones expuestas
     displayOLEDManager();  // hay que implementar 
     void initOLED(ModbusSlaveData* slaves, uint8_t numSlaves, SemaphoreHandle_t dataMutex); 
-    void updateOLED();; 
+    void updateOLED();
 };
 
 #endif

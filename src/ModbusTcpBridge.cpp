@@ -164,17 +164,17 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         ESP_LOGI(TAG, "Command processed successfully. Sending TCP response.");
         sendTCPResponse(client, mbData);
     } else {
-        int errNoCopy = _mbClient->lastErrorCode(); 
+        int errorCode = _mbClient->lastErrorCode(); 
         uint8_t exceptionCode = SLAVE_DEVICE_FAILURE; // Default: Slave Device Failure
 
-        ESP_LOGE(TAG, "RTU operation failed. Errno: %d, Text: %s", errNoCopy, _mbClient->lastError());
+        ESP_LOGE(TAG, "RTU operation failed: %d, Text: %s", errorCode, _mbClient->lastError());
 
         // Map RTU/System errors to standard Modbus TCP exception codes
-        if (errNoCopy == ETIMEDOUT || errNoCopy == 110) { 
+        if (errorCode == ETIMEDOUT || errorCode == 110) { 
             exceptionCode = 0x0B; // Gateway Target Device Failed to Respond
-        } else if (errNoCopy == EINVAL) {
+        } else if (errorCode == EINVAL) {
             exceptionCode = ILEGAL_DATA_VALUE; // Illegal Data Value
-        } else if (errNoCopy == CODE_ILEGAL_ADDRES){ 
+        } else if (errorCode == CODE_ILEGAL_ADDRES){ 
             exceptionCode = 0x02; // Illegal Data Address
         }
         

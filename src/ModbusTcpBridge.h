@@ -31,7 +31,7 @@ struct modbusStruct {
 class WeidosEthernetServer : public EthernetServer {
 public:
     WeidosEthernetServer(uint16_t port) : EthernetServer(port) {}
-    virtual void begin(uint16_t port) override {
+    void begin(uint16_t port) override {
         EthernetServer::begin(); 
     }
 };
