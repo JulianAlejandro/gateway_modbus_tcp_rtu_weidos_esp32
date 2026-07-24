@@ -83,6 +83,8 @@ public:
      */
     static int getModbusClientDataType(uint8_t functionCode);
 
+    bool isTcpTransferActive() const { return _tcpTransferActive; }
+
 private:   
     uint16_t _port;
     WeidosEthernetServer _ethernetServer;  
@@ -91,6 +93,7 @@ private:
 
     IThreadLock* _lock;
     DummyLock _defaultLock; // Fallback default lock object
+    volatile bool _tcpTransferActive = false;
 
     ModbusInterceptorCallback _interceptor = nullptr;
     ModbusTCPReqCallback _tcpReqCallback = nullptr; 

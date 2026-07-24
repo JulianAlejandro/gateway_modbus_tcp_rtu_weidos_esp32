@@ -155,6 +155,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         return; 
     }
     // Thread-safe block to protect the shared physical HW of the client bus (RS485)
+    _tcpTransferActive = true;
     _lock->lock(); 
     bool success = processCommand(mbData);
 
@@ -180,6 +181,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         sendTCPException(client, mbData, exceptionCode);
     }     
     _lock->unlock();
+    _tcpTransferActive = false;
 }
 
 /**

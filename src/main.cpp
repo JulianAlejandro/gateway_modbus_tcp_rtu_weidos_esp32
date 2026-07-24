@@ -106,24 +106,36 @@ void setup() {
 
     E2PROM.begin(); 
 
+    bool loadedFromSD = false;
     if(sdManager.begin() == ESP_OK){ // TODO mejorar 
         if(sdManager.exists(PARAM_FILE)){
+            ESP_LOGI(TAG, "[SD] Archivo de configuración encontrado. Cargando...");
             CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
             EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
 
             E2PROM.put(0, configFromSD);
+            sysConfig = configFromSD;
+            loadedFromSD = true; 
+            ESP_LOGI(TAG, "[SD -> EEPROM] Configuración guardada en EEPROM exitosamente.");
             
         }else{
-            ESP_LOGE(TAG, "Error no existe fichero de configuracion");
+            ESP_LOGW(TAG, "[SD] Advertencia: La tarjeta SD está montada pero no contiene %s", PARAM_FILE);
         }
         sdManager.end(); 
+    }else{
+        ESP_LOGW(TAG, "[SD] Tarjeta SD no detectada o fallo al montar.");
     }
 
-     if(!loadConfigurationFromEEPROM(sysConfig)){
-        sysConfig = DEFAULT_SYS_CONFIG;
-        ESP_LOGE(TAG,"Cargada configuracion por defecto. "); 
-     } 
+    if (!loadedFromSD) {
+        ESP_LOGI(TAG, "[EEPROM] Intentando cargar configuración desde EEPROM...");
 
+        if(!loadConfigurationFromEEPROM(sysConfig)){
+            ESP_LOGE(TAG, "[CRÍTICO] Fallo de SD y EEPROM inválida. Cargando valores por defecto (FLASH)...");
+            sysConfig = DEFAULT_SYS_CONFIG;
+            E2PROM.put(0, sysConfig);
+        } 
+    }
+    
     printConfig(sysConfig);
 
     IPAddress ip(sysConfig.ip);
@@ -215,6 +227,9 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     bool lecturaExitosa = false;
 
     // Sincronización directa usando el objeto (eliminado el check de nullptr)
+    if (modbusTcpBridge.isTcpTransferActive()) {
+        return false;  // TCP request en progreso, saltar este ciclo
+    }
     rtuThreadLock.lock(); 
     
     int dataType = ModbusTcpBridge::getModbusClientDataType(slave->functionCode);
