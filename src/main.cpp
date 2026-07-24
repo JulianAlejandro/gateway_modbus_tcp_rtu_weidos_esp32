@@ -21,6 +21,7 @@ SDManager sdManager;
 
 const EEPROMSystemConfig DEFAULT_SYS_CONFIG = {
     CONFIG_MAGIC_KEY,
+    CONFIG_VERSION,
     {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}, // MAC
     {192, 168, 1, 150},                  // IP
     {192, 168, 1, 1},                    // Gateway
@@ -132,6 +133,8 @@ void setup() {
         if(!loadConfigurationFromEEPROM(sysConfig)){
             ESP_LOGE(TAG, "[CRÍTICO] Fallo de SD y EEPROM inválida. Cargando valores por defecto (FLASH)...");
             sysConfig = DEFAULT_SYS_CONFIG;
+            size_t dataLen = offsetof(EEPROMSystemConfig, crc);
+            sysConfig.crc = calculateCRC16(reinterpret_cast<const uint8_t*>(&sysConfig), dataLen);
             E2PROM.put(0, sysConfig);
         } 
     }
@@ -258,14 +261,22 @@ bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg) {
     E2PROM.begin();
     E2PROM.get(0, cfg);
 
-    // Validación mediante Magic Key
     if (cfg.magic != CONFIG_MAGIC_KEY) {
-        //Serial.println("[ERROR EEPROM] Configuración no encontrada o corrupta. Bucle de seguridad activado.");
-        ESP_LOGE(TAG, "[ERROR EEPROM] Magic Key no coincide o datos corruptos."); 
-        return false; 
+        ESP_LOGE(TAG, "Magic Key no coincide. EEPROM no inicializada.");
+        return false;
     }
 
-    //Serial.println("[EEPROM] Configuración cargada correctamente desde la EEPROM.");
-    ESP_LOGI(TAG, "configuracion cargada.");
+    if (cfg.version != CONFIG_VERSION) {
+        ESP_LOGW(TAG, "Version incompatible (EEPROM: %d, FW: %d). Re-inicializando.",
+                 cfg.version, CONFIG_VERSION);
+        return false;
+    }
+
+    if (!verifyConfigCRC(cfg)) {
+        ESP_LOGE(TAG, "CRC invalido. Datos EEPROM corruptos.");
+        return false;
+    }
+
+    ESP_LOGI(TAG, "Configuracion EEPROM validada (v%d, CRC ok).", cfg.version);
     return true;
 }

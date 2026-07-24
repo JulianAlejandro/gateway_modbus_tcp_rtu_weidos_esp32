@@ -7,6 +7,7 @@
 #define MAX_TEXT_SIZE 32
 
 #define CONFIG_MAGIC_KEY 0x4D425331 // "MBS1" - Clave para verificar si la EEPROM está inicializada
+#define CONFIG_VERSION 1            // Version del struct EEPROMSystemConfig. Incrementar al cambiar layout.
 
 /**
  * @struct CSVSystemConfig
@@ -35,8 +36,10 @@ struct CSVSystemConfig {
     char internalSlaveId[MAX_TEXT_SIZE];
 };
 
+#pragma pack(push, 1)  // Sin padding para serialización consistente en EEPROM
 struct EEPROMSystemConfig {
     uint32_t magic;           // Marcador para validar la configuración
+    uint8_t version;          // Version del struct (debe coincidir con CONFIG_VERSION)
 
     // --- MODBUS TCP ---
     uint8_t mac[6];
@@ -58,7 +61,10 @@ struct EEPROMSystemConfig {
 
     // --- INTERNAL SLAVE ---
     uint8_t internal_slave_id;
+
+    uint16_t crc;             // CRC16 sobre todo el struct (excepto este campo)
 };
+#pragma pack(pop)
 
 /**
  * @brief Lee el archivo CSV de configuración de la SD y llena la estructura SystemConfigRaw.
@@ -76,4 +82,7 @@ CSVSystemConfig SDgetSystemConfig(SDManager* _sd);
 EEPROMSystemConfig rawToSystemConfig(const CSVSystemConfig& raw); 
 
 void printConfig(const EEPROMSystemConfig& cfg);
+
+uint16_t calculateCRC16(const uint8_t* data, size_t length);
+bool verifyConfigCRC(const EEPROMSystemConfig& cfg);
 
