@@ -33,7 +33,7 @@ esp_err_t SDManager::begin() {
 /**
  * @brief Returns the initialization status.
  */
-bool SDManager::isReady() {
+bool SDManager::isReady() const{
     return _initialized;
 }
 
@@ -58,7 +58,7 @@ esp_err_t SDManager::createFile(const char* path) {
 /**
  * @brief Checks existence of a resource at the given path.
  */
-bool SDManager::exists(const char* path) {
+bool SDManager::exists(const char* path) const {
     return SD.exists(path);
 }
 

@@ -43,7 +43,7 @@ public:
      * @brief Checks if the SD card is initialized and ready for operations.
      * @return Current initialization state.
      */
-    bool isReady();
+    bool isReady() const;
 
     /**
      * @brief Creates a new empty file if it doesn't exist.
@@ -64,7 +64,7 @@ public:
      * @param path Path to check.
      * @return true if found.
      */
-    bool exists(const char* path);
+    bool exists(const char* path) const;
 
     /**
      * @brief Deletes all content from a file (truncates to zero size).

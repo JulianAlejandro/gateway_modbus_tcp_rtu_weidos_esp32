@@ -7,6 +7,7 @@
 #include "IModbusClient.h"
 #include "IThreadLock.h"
 #include <functional>
+ #include <atomic>
 
 #define SIZE_MB_TCP_FRAME 260
 
