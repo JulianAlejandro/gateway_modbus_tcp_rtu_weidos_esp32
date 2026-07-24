@@ -3,49 +3,64 @@
 
 #include "IModbusClient.h"
 #include <ModbusRTUClient.h>
-#include <errno.h>
 
 class ModbusRtuClient : public IModbusClient {
 private:
     ModbusRTUClientClass* _rtu;
+    int _lastError = 0;
 
 public:
     ModbusRtuClient(ModbusRTUClientClass* rtu) : _rtu(rtu) {
-        //_rtu->setTimeout(500);
     }
 
-    int coilRead(int id, int address){
-        return _rtu->coilRead(id, address); 
-    } 
+    int coilRead(int id, int address) override {
+        int result = _rtu->coilRead(id, address);
+        _lastError = (result == -1) ? errno : 0;
+        return result;
+    }
 
     int discreteInputRead(int id, int address) override {
-        return _rtu->discreteInputRead(id, address);
+        int result = _rtu->discreteInputRead(id, address);
+        _lastError = (result == -1) ? errno : 0;
+        return result;
     }
 
     long holdingRegisterRead(int id, int address) override {
-        return _rtu->holdingRegisterRead(id, address);
+        long result = _rtu->holdingRegisterRead(id, address);
+        _lastError = (result == -1) ? errno : 0;
+        return result;
     }
 
     long inputRegisterRead(int id, int address) override {
-        return _rtu->inputRegisterRead(id, address);
+        long result = _rtu->inputRegisterRead(id, address);
+        _lastError = (result == -1) ? errno : 0;
+        return result;
     }
 
     // Escritura
     int coilWrite(int id, int address, uint8_t value) override {
-        return _rtu->coilWrite(id, address, value); 
+        int result = _rtu->coilWrite(id, address, value);
+        _lastError = (result == 0) ? errno : 0;
+        return result;
     }
 
     int holdingRegisterWrite(int id, int address, uint16_t value) override {
-        return _rtu->holdingRegisterWrite(id, address, value);
+        int result = _rtu->holdingRegisterWrite(id, address, value);
+        _lastError = (result == 0) ? errno : 0;
+        return result;
     }
 
     int registerMaskWrite(int id, int address, uint16_t andMask, uint16_t orMask) override {
-        return _rtu->registerMaskWrite(id, address, andMask, orMask);
+        int result = _rtu->registerMaskWrite(id, address, andMask, orMask);
+        _lastError = (result == 0) ? errno : 0;
+        return result;
     }
 
     // Streaming de Escritura
     int beginTransmission(int id, int type, int address, int nb) override {
-        return _rtu->beginTransmission(id, type, address, nb);
+        int result = _rtu->beginTransmission(id, type, address, nb);
+        _lastError = (result == 0) ? errno : 0;
+        return result;
     }
 
     void write(unsigned int value) override {
@@ -53,16 +68,20 @@ public:
     }
 
     int endTransmission() override {
-        return _rtu->endTransmission();
+        int result = _rtu->endTransmission();
+        _lastError = (result == 0) ? errno : 0;
+        return result;
     }
 
     // Streaming de Lectura
-    int requestFrom(int id, int type, int address,int nb) override {
-        return _rtu->requestFrom(id, type, address, nb);
+    int requestFrom(int id, int type, int address, int nb) override {
+        int result = _rtu->requestFrom(id, type, address, nb);
+        _lastError = (result == 0) ? errno : 0;
+        return result;
     }
 
-    int available(){
-        return _rtu->available(); 
+    int available() override {
+        return _rtu->available();
     }
 
     long read() override {
@@ -75,11 +94,11 @@ public:
     }
 
     int lastErrorCode() override {
-        return errno;
+        return _lastError;
     }
 
-    void end(){
-        _rtu->end();  
+    void end() override {
+        _rtu->end();
     }
 
     void setTimeout(unsigned long ms) override {

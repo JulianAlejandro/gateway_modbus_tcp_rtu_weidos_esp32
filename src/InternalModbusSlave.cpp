@@ -21,7 +21,11 @@ InternalModbusSlave::~InternalModbusSlave() {
 
 // Inicializa los 4 bloques de memoria y configura los pines físicos
 bool InternalModbusSlave::begin() {
-    
+    if (_mapping != nullptr) {
+        modbus_mapping_free(_mapping);
+        _mapping = nullptr;
+    }
+
     _mapping = modbus_mapping_new(NUM_COILS, NUM_DISCRETE, NUM_HOLDING_REGS, NUM_INPUT_REGS);
     if (_mapping == nullptr) {
         ESP_LOGE(TAG, "Failed to allocate libmodbus mapping tables.");
