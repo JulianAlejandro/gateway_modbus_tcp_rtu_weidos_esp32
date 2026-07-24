@@ -83,6 +83,8 @@ EEPROMSystemConfig rawToSystemConfig(const CSVSystemConfig& raw);
 
 void printConfig(const EEPROMSystemConfig& cfg);
 
+bool validateCSVConfig(const CSVSystemConfig& raw);
+
 uint16_t calculateCRC16(const uint8_t* data, size_t length);
 bool verifyConfigCRC(const EEPROMSystemConfig& cfg);
 

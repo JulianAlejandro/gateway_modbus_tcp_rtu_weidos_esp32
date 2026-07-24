@@ -117,12 +117,17 @@ void setup() {
         if(sdManager.exists(PARAM_FILE)){
             ESP_LOGI(TAG, "[SD] Archivo de configuración encontrado. Cargando...");
             CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
-            EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
 
-            E2PROM.put(0, configFromSD);
-            sysConfig = configFromSD;
-            loadedFromSD = true; 
-            ESP_LOGI(TAG, "[SD -> EEPROM] Configuración guardada en EEPROM exitosamente.");
+            if (!validateCSVConfig(configRaw)) {
+                ESP_LOGE(TAG, "[SD] Configuración CSV inválida. Ignorando SD.");
+            } else {
+                EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
+
+                E2PROM.put(0, configFromSD);
+                sysConfig = configFromSD;
+                loadedFromSD = true; 
+                ESP_LOGI(TAG, "[SD -> EEPROM] Configuración guardada en EEPROM exitosamente.");
+            }
             
         }else{
             ESP_LOGW(TAG, "[SD] Advertencia: La tarjeta SD está montada pero no contiene %s", PARAM_FILE);

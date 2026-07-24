@@ -2,6 +2,9 @@
 #include <CSV_Parser.h>
 #include <cstring>
 #include <cstddef>
+#include "esp_log.h"
+
+static const char* TAG = "SYS_CFG";
 
 // Tabla CRC16 (polynomial 0x8005, CRC-16/Modbus)
 static const uint16_t crc16_table[256] = {
@@ -79,7 +82,7 @@ CSVSystemConfig SDgetSystemConfig(SDManager* _sd) {
     }
 
     // "ssss" -> 4 columnas tipo string (Name; Value; Editable; coment)
-    CSV_Parser cp("ssss", true, ';');
+    CSV_Parser cp("sssss", true, ';');
 
     // Leemos el archivo pasándole las líneas al parser
     _sd->withFile(PARAM_FILE, [](Stream& file, void* arg) {
@@ -132,7 +135,7 @@ CSVSystemConfig SDgetSystemConfig(SDManager* _sd) {
                 strncpy(res.rtuConfig, values[i], MAX_TEXT_SIZE - 1);
             } else if (strcmp(key, "Inter-frame delay (ms)") == 0) {
                 strncpy(res.interFrameDelay, values[i], MAX_TEXT_SIZE - 1);
-            } else if (strcmp(key, "Response Timeout") == 0) {
+            } else if (strcmp(key, "Response Timeout (ms)") == 0) {
                 strncpy(res.responseTimeout, values[i], MAX_TEXT_SIZE - 1);
             } else if (strcmp(key, "Attemp") == 0) {
                 strncpy(res.attempts, values[i], MAX_TEXT_SIZE - 1);
@@ -164,6 +167,115 @@ bool parseMAC(const char* str, uint8_t out[6]) {
         return true;
     }
     return false;
+}
+
+static bool isValidIP(const char* str) {
+    if (!str || str[0] == '\0') return false;
+    int a, b, c, d;
+    if (sscanf(str, "%d.%d.%d.%d", &a, &b, &c, &d) != 4) return false;
+    if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255) return false;
+    return true;
+}
+
+static bool isValidMAC(const char* str) {
+    if (!str || str[0] == '\0') return false;
+    int m[6];
+    if (sscanf(str, "%x:%x:%x:%x:%x:%x", &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]) != 6) return false;
+    for (int i = 0; i < 6; i++) {
+        if (m[i] < 0 || m[i] > 255) return false;
+    }
+    return true;
+}
+
+static bool isValidSerialConfig(const char* str) {
+    if (!str || str[0] == '\0') return false;
+    return (strcmp(str, "SERIAL_5N1") == 0 || strcmp(str, "SERIAL_6N1") == 0 ||
+            strcmp(str, "SERIAL_7N1") == 0 || strcmp(str, "SERIAL_8N1") == 0 ||
+            strcmp(str, "SERIAL_5N2") == 0 || strcmp(str, "SERIAL_6N2") == 0 ||
+            strcmp(str, "SERIAL_7N2") == 0 || strcmp(str, "SERIAL_8N2") == 0 ||
+            strcmp(str, "SERIAL_5E1") == 0 || strcmp(str, "SERIAL_6E1") == 0 ||
+            strcmp(str, "SERIAL_7E1") == 0 || strcmp(str, "SERIAL_8E1") == 0 ||
+            strcmp(str, "SERIAL_5E2") == 0 || strcmp(str, "SERIAL_6E2") == 0 ||
+            strcmp(str, "SERIAL_7E2") == 0 || strcmp(str, "SERIAL_8E2") == 0 ||
+            strcmp(str, "SERIAL_5O1") == 0 || strcmp(str, "SERIAL_6O1") == 0 ||
+            strcmp(str, "SERIAL_7O1") == 0 || strcmp(str, "SERIAL_8O1") == 0 ||
+            strcmp(str, "SERIAL_5O2") == 0 || strcmp(str, "SERIAL_6O2") == 0 ||
+            strcmp(str, "SERIAL_7O2") == 0 || strcmp(str, "SERIAL_8O2") == 0);
+}
+
+bool validateCSVConfig(const CSVSystemConfig& raw) {
+    bool valid = true;
+
+    // MAC address
+    if (!isValidMAC(raw.mac)) {
+        ESP_LOGE(TAG, "Invalid MAC address: '%s'", raw.mac);
+        valid = false;
+    }
+
+    // IP addresses
+    if (!isValidIP(raw.ip)) {
+        ESP_LOGE(TAG, "Invalid IP address: '%s'", raw.ip);
+        valid = false;
+    }
+    if (!isValidIP(raw.gateway)) {
+        ESP_LOGE(TAG, "Invalid gateway: '%s'", raw.gateway);
+        valid = false;
+    }
+    if (!isValidIP(raw.subnet)) {
+        ESP_LOGE(TAG, "Invalid subnet: '%s'", raw.subnet);
+        valid = false;
+    }
+    if (!isValidIP(raw.dns)) {
+        ESP_LOGE(TAG, "Invalid DNS: '%s'", raw.dns);
+        valid = false;
+    }
+
+    // Port: 1-65535
+    int port = atoi(raw.port);
+    if (port < 1 || port > 65535) {
+        ESP_LOGE(TAG, "Invalid port: '%s' (must be 1-65535)", raw.port);
+        valid = false;
+    }
+
+    // Baudrate: 300-115200
+    int baudrate = atoi(raw.baudrate);
+    if (baudrate < 300 || baudrate > 115200) {
+        ESP_LOGE(TAG, "Invalid baudrate: '%s' (must be 300-115200)", raw.baudrate);
+        valid = false;
+    }
+
+    // Serial config: must be valid
+    if (!isValidSerialConfig(raw.rtuConfig)) {
+        ESP_LOGE(TAG, "Invalid RTU config: '%s'", raw.rtuConfig);
+        valid = false;
+    }
+
+    // Inter-frame delay: 2-250
+    int interFrameDelay = atoi(raw.interFrameDelay);
+    if (interFrameDelay < 2 || interFrameDelay > 250) {
+        ESP_LOGE(TAG, "Invalid inter-frame delay: '%s' (must be 2-250 ms)", raw.interFrameDelay);
+        valid = false;
+    }
+
+    // Response timeout: 50-5000
+    int responseTimeout = atoi(raw.responseTimeout);
+    if (responseTimeout < 50 || responseTimeout > 5000) {
+        ESP_LOGE(TAG, "Invalid response timeout: '%s' (must be 50-5000 ms)", raw.responseTimeout);
+        valid = false;
+    }
+
+    // Attempts: 1-5
+    int attempts = atoi(raw.attempts);
+    if (attempts < 1 || attempts > 5) {
+        ESP_LOGE(TAG, "Invalid attempts: '%s' (must be 1-5)", raw.attempts);
+        valid = false;
+    }
+
+    if (valid) {
+        ESP_LOGI(TAG, "CSV configuration validated successfully");
+    }
+
+    return valid;
 }
 
 uint32_t parseSerialConfig(const char* str) {
