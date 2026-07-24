@@ -18,8 +18,9 @@
 static const char* TAG = "MAIN_APP"; 
 
 SDManager sdManager; 
-EEPROMSystemConfig sysConfig = { // por defecto
-     CONFIG_MAGIC_KEY,
+
+const EEPROMSystemConfig DEFAULT_SYS_CONFIG = {
+    CONFIG_MAGIC_KEY,
     {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}, // MAC
     {192, 168, 1, 150},                  // IP
     {192, 168, 1, 1},                    // Gateway
@@ -33,11 +34,10 @@ EEPROMSystemConfig sysConfig = { // por defecto
     5000,                                // Response Timeout
     3,                                   // Attempts
     10                                   // Internal Slave ID
-}; 
+};
 
+EEPROMSystemConfig sysConfig = DEFAULT_SYS_CONFIG;  
  
-//-------------------------------------------------
-
 // --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
 // Inicialmente arranca con el DummyLock interno por defecto
 ModbusInternalClient internalClient(&internalSlaveID10); 
@@ -67,7 +67,7 @@ const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
 void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave);
-EEPROMSystemConfig loadConfigurationFromEEPROM();   
+bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg);   
 
 void checkTCPReqCallback(const modbusStruct& req) { // TODO: pensar en como podemos mejorar el asunto de relacion entre HW y mutex 
     if (req.slaveID == sysConfig.internal_slave_id) {
@@ -107,14 +107,22 @@ void setup() {
     E2PROM.begin(); 
 
     if(sdManager.begin() == ESP_OK){ // TODO mejorar 
-        CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
-        EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
+        if(sdManager.exists(PARAM_FILE)){
+            CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
+            EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
 
-         E2PROM.put(0, configFromSD);
-         sdManager.end(); 
+            E2PROM.put(0, configFromSD);
+            
+        }else{
+            ESP_LOGE(TAG, "Error no existe fichero de configuracion");
+        }
+        sdManager.end(); 
     }
 
-    sysConfig = loadConfigurationFromEEPROM(); 
+     if(!loadConfigurationFromEEPROM(sysConfig)){
+        sysConfig = DEFAULT_SYS_CONFIG;
+        ESP_LOGE(TAG,"Cargada configuracion por defecto. "); 
+     } 
 
     printConfig(sysConfig);
 
@@ -231,20 +239,18 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     return lecturaExitosa; 
 }
 
-EEPROMSystemConfig loadConfigurationFromEEPROM() {
+bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg) {
     E2PROM.begin();
-    
-    EEPROMSystemConfig config;
-    E2PROM.get(0, config);
+    E2PROM.get(0, cfg);
 
     // Validación mediante Magic Key
-    if (config.magic != CONFIG_MAGIC_KEY) {
+    if (cfg.magic != CONFIG_MAGIC_KEY) {
         //Serial.println("[ERROR EEPROM] Configuración no encontrada o corrupta. Bucle de seguridad activado.");
-        ESP_LOGE(TAG, "Error Magic Key"); 
-        while(1) { delay(1000); } // Bloquea si la memoria no está correctamente inicializada
+        ESP_LOGE(TAG, "[ERROR EEPROM] Magic Key no coincide o datos corruptos."); 
+        return false; 
     }
 
     //Serial.println("[EEPROM] Configuración cargada correctamente desde la EEPROM.");
-    ESP_LOGI(TAG, "[EEPROM] Configuración cargada correctamente desde la EEPROM.");
-    return config;
+    ESP_LOGI(TAG, "configuracion cargada.");
+    return true;
 }
