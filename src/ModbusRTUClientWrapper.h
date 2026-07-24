@@ -3,6 +3,7 @@
 
 #include "IModbusClient.h"
 #include <ModbusRTUClient.h>
+#include <errno.h>
 
 class ModbusRtuClient : public IModbusClient {
 private:
@@ -71,6 +72,10 @@ public:
     // Utilidades
     const char* lastError() override {
         return _rtu->lastError();
+    }
+
+    int lastErrorCode() override {
+        return errno;
     }
 
     void end(){

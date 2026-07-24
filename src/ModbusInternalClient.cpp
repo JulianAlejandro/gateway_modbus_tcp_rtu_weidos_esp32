@@ -10,13 +10,13 @@ ModbusInternalClient::ModbusInternalClient(InternalModbusSlave* slave)
 */
 ModbusInternalClient::ModbusInternalClient(InternalModbusSlave* slave) 
     : _slave(slave), _bufferIndex(0), _bufferLength(0), _writeIndex(0), 
-      _writeDataType(0), _writeAddress(0){}
+      _writeDataType(0), _writeAddress(0), _lastError(0){}
 
 //no usado
 int ModbusInternalClient::coilRead(int id, int address) {
     if (address < 0 || address >= _slave->getCoilsCount()) {
         ESP_LOGE(TAG, "Coil read out of range. Address: %d", address);
-        errno = CODE_ILEGAL_ADDRES;
+        _lastError = CODE_ILEGAL_ADDRES;
         return -1;
     }
     _slave->updatePhysicalIO();
@@ -27,7 +27,7 @@ int ModbusInternalClient::coilRead(int id, int address) {
 int ModbusInternalClient::discreteInputRead(int id, int address) {
     if (address < 0 || address >= _slave->getDiscreteInputsCount()) {
         ESP_LOGE(TAG, "Discrete input read out of range. Address: %d", address);
-        errno = CODE_ILEGAL_ADDRES;
+        _lastError = CODE_ILEGAL_ADDRES;
         return -1;
     }
     _slave->updatePhysicalIO();
@@ -38,7 +38,7 @@ int ModbusInternalClient::discreteInputRead(int id, int address) {
 long ModbusInternalClient::holdingRegisterRead(int id, int address) {
     if (address < 0 || address >= _slave->getHoldingRegistersCount()) {
         ESP_LOGE(TAG, "Holding register read out of range. Address: %d", address);
-        errno = CODE_ILEGAL_ADDRES;
+        _lastError = CODE_ILEGAL_ADDRES;
         return -1;
     }
     _slave->updatePhysicalIO();
@@ -49,7 +49,7 @@ long ModbusInternalClient::holdingRegisterRead(int id, int address) {
 long ModbusInternalClient::inputRegisterRead(int id, int address) {
     if (address < 0 || address >= _slave->getInputRegistersCount()) {
         ESP_LOGE(TAG, "Input register read out of range. Address: %d", address);
-        errno = CODE_ILEGAL_ADDRES;
+        _lastError = CODE_ILEGAL_ADDRES;
         return -1;
     }
     _slave->updatePhysicalIO();
@@ -60,7 +60,7 @@ long ModbusInternalClient::inputRegisterRead(int id, int address) {
 int ModbusInternalClient::coilWrite(int id, int address, uint8_t value) {
     if (!_slave->writeSinglecoil(address, value != 0)) {
         ESP_LOGE(TAG, "Coil write rejected by slave. Address: %d", address);
-        errno = CODE_ILEGAL_ADDRES; 
+        _lastError = CODE_ILEGAL_ADDRES; 
         return 0; // 0 = Fallo en escritura
     }
     _slave->updatePhysicalIO();
@@ -71,7 +71,7 @@ int ModbusInternalClient::coilWrite(int id, int address, uint8_t value) {
 int ModbusInternalClient::holdingRegisterWrite(int id, int address, uint16_t value){
     if (!_slave->writeSingleRegister(address, value)) {
         ESP_LOGE(TAG, "Register write rejected by slave. Address: %i", address);
-        errno = EINVAL; 
+        _lastError = EINVAL; 
         return 0;
     }
     _slave->updatePhysicalIO();
@@ -82,7 +82,7 @@ int ModbusInternalClient::holdingRegisterWrite(int id, int address, uint16_t val
 int ModbusInternalClient::registerMaskWrite(int id, int address, uint16_t andMask, uint16_t orMask) {
     if (address < 0 || address >= _slave->getHoldingRegistersCount()) {
         ESP_LOGE(TAG, "Mask write address out of range: %d", address);
-        errno = CODE_ILEGAL_ADDRES;
+        _lastError = CODE_ILEGAL_ADDRES;
         return 0;
     }
     
@@ -91,7 +91,7 @@ int ModbusInternalClient::registerMaskWrite(int id, int address, uint16_t andMas
     uint16_t newVal = (currentVal & andMask) | orMask;
     
     if (!_slave->writeSingleRegister(address, newVal)) {
-        errno = EINVAL;
+        _lastError = EINVAL;
         return 0;
     }
     _slave->updatePhysicalIO();
@@ -103,13 +103,13 @@ int ModbusInternalClient::beginTransmission(int id, int type, int address, int n
     if (type == COILS) maxCount = _slave->getCoilsCount();
     else if (type == HOLDING_REGISTERS) maxCount = _slave->getHoldingRegistersCount();
     else {
-        errno = EINVAL;
+        _lastError = EINVAL;
         return 0;
     }
 
     if (address < 0 || (address + nb) > maxCount) {
         ESP_LOGE(TAG, "Write block out of range. Start: %d, Count: %d", address, nb);
-        errno = CODE_ILEGAL_ADDRES;
+        _lastError = CODE_ILEGAL_ADDRES;
         return 0; 
     }
 
@@ -141,13 +141,13 @@ int ModbusInternalClient::requestFrom(int id, int type, int address, int nb) {
         case HOLDING_REGISTERS: maxCount = _slave->getHoldingRegistersCount(); break;
         case INPUT_REGISTERS:   maxCount = _slave->getInputRegistersCount(); break;
         default: 
-            errno = EINVAL;
+            _lastError = EINVAL;
             return 0; 
     }
 
     if (address < 0 || (address + nb) > maxCount || nb > 125) {
         ESP_LOGE(TAG, "Read request out of range or block too large. Count: %d", nb);
-        errno = CODE_ILEGAL_ADDRES; 
+        _lastError = CODE_ILEGAL_ADDRES; 
         return 0;   
     }
 
@@ -179,16 +179,20 @@ long ModbusInternalClient::read() {
 }
 
 const char* ModbusInternalClient::lastError() { 
-    if (errno == 0) {
+    if (_lastError == 0) {
         return ""; 
     }
-    if (errno == CODE_ILEGAL_ADDRES) {
+    if (_lastError == CODE_ILEGAL_ADDRES) {
         return "Modbus Exception: Illegal Data Address (Internal Slave)";
     }
-    if (errno == EINVAL) {
+    if (_lastError == EINVAL) {
         return "Modbus Exception: Illegal Data Value (Internal Slave)";
     }
-    return modbus_strerror(errno); 
+    return modbus_strerror(_lastError); 
+}
+
+int ModbusInternalClient::lastErrorCode() {
+    return _lastError;
 }
 
 void ModbusInternalClient::end() {

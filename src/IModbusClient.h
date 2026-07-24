@@ -12,8 +12,8 @@
 */
 
 #define CODE_ILEGAL_ADDRES 112345680
-#define ILEGAL_DATA_VALUE 0x03; // Illegal Data Value
-#define SLAVE_DEVICE_FAILURE 0x04; // Default: Slave Device Failure
+#define ILEGAL_DATA_VALUE 0x03 // Illegal Data Value
+#define SLAVE_DEVICE_FAILURE 0x04 // Default: Slave Device Failure
 //#define GATEWAY_TARGET_DEVICE_FAILED //Gateway Target Device Failed to Respond
 
 /**
@@ -140,6 +140,13 @@ public:
      * * @return const char* Constant pointer to a character string detailing the error code summary.
      */
     virtual const char* lastError() = 0;
+
+    /**
+     * @brief Retrieves the numeric error code from the last failed operation.
+     * @return int Error code (0 = no error). Unlike lastError(), this is task-safe
+     * because each implementation stores its own error code internally.
+     */
+    virtual int lastErrorCode() = 0;
 
     /**
      * @brief Stops active transactions, releases system resources, and closes the client interface.

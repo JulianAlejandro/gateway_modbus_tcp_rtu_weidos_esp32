@@ -21,6 +21,8 @@ private:
     int _writeAddress;                 ///< Current baseline register cursor offset for sequence buffering.
     int _writeIndex;                   ///< Tracking step layout increment counter during sequence transmissions.
 
+    int _lastError = 0;                ///< Internal error code (thread-safe, no errno dependency)
+
 public:
     /**
      * @brief Constructor for the local internal memory client manager.
@@ -48,6 +50,7 @@ public:
     long read() override;
 
     const char* lastError() override;
+    int lastErrorCode() override;
     void end() override; 
     void setTimeout(unsigned long ms) override; 
      

@@ -164,7 +164,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         ESP_LOGI(TAG, "Command processed successfully. Sending TCP response.");
         sendTCPResponse(client, mbData);
     } else {
-        int errNoCopy = errno; 
+        int errNoCopy = _mbClient->lastErrorCode(); 
         uint8_t exceptionCode = SLAVE_DEVICE_FAILURE; // Default: Slave Device Failure
 
         ESP_LOGE(TAG, "RTU operation failed. Errno: %d, Text: %s", errNoCopy, _mbClient->lastError());
