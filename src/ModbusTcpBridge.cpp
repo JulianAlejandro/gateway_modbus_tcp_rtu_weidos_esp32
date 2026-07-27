@@ -170,7 +170,7 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         ESP_LOGE(TAG, "RTU operation failed: %d, Text: %s", errorCode, _mbClient->lastError());
 
         // Map RTU/System errors to standard Modbus TCP exception codes
-        if (errorCode == ETIMEDOUT || errorCode == 110) { 
+        if (errorCode == ETIMEDOUT) { 
             exceptionCode = 0x0B; // Gateway Target Device Failed to Respond
         } else if (errorCode == EINVAL) {
             exceptionCode = ILEGAL_DATA_VALUE; // Illegal Data Value

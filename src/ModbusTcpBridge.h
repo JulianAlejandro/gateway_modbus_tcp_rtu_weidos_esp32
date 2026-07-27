@@ -7,6 +7,7 @@
 #include "IModbusClient.h"
 #include "IThreadLock.h"
 #include <functional>
+#include <atomic>
 
 
 #define SIZE_MB_TCP_FRAME 260
@@ -26,13 +27,11 @@ struct modbusStruct {
   uint16_t quantity_value; 
 };
 
-/**
- * @brief Custom Ethernet Server override to standardize startup signatures.
- */
 class WeidosEthernetServer : public EthernetServer {
 public:
     WeidosEthernetServer(uint16_t port) : EthernetServer(port) {}
-    void begin(uint16_t port) override {
+    void begin(uint16_t port = 0) override {
+        (void)port;
         EthernetServer::begin(); 
     }
 };
@@ -94,7 +93,7 @@ private:
 
     IThreadLock* _lock;
     DummyLock _defaultLock; // Fallback default lock object
-    volatile bool _tcpTransferActive = false;
+    std::atomic<bool> _tcpTransferActive{false};
 
     ModbusInterceptorCallback _interceptor = nullptr;
     ModbusTCPReqCallback _tcpReqCallback = nullptr; 
