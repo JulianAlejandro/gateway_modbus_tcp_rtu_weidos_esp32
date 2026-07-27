@@ -78,7 +78,8 @@ public:
     void setTCPReqCallback(ModbusTCPReqCallback callback) { _tcpReqCallback = callback;}
 
     void setModbusClient(IModbusClient* mbClient);
-    void setThreadLock(IThreadLock* lock);  
+    void setThreadLock(IThreadLock* lock);
+    void setInterFrameDelay(uint32_t ms);  
 
     /**
      * @brief Maps Modbus Function Codes to client standard data type constants.
@@ -99,6 +100,7 @@ private:
 
     ModbusInterceptorCallback _interceptor = nullptr;
     ModbusTCPReqCallback _tcpReqCallback = nullptr; 
+    uint32_t _interFrameDelay = 0;
 
     void handleClient(EthernetClient& client);
     

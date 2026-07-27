@@ -56,11 +56,11 @@ displayOLEDManager disp;
 
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
-    { "CL2",  "ppm",  3,        1,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
-    { "COND", "us",   1,        2,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
-    { "REDOX","mV",   1,        3,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
-    { "TURB", "NTU",  3,        4,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0},
-    { "PH",   "pH",   2,        5,      0,      2,       0x03,       {0, 0},      0.0,         false,        0,      false,    0}
+    { "CL2",    "ppm",   3,      1,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "COND",   "us",    1,      2,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "REDOX",  "mV",    1,      3,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "TURB",   "NTU",   3,      4,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "PH",     "pH",    2,      5,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0}
 };
 
 const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
@@ -170,6 +170,7 @@ void setup() {
     RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
     ModbusRTUClient.begin(sysConfig.baudrate, (uint32_t)sysConfig.rtuClientConfig);
     ModbusRTUClient.setTimeout(sysConfig.responseTimeout); // esto tiene que poder funcionar a 5000....MODIFICAR 
+    modbusTcpBridge.setInterFrameDelay(sysConfig.interFrameDelay);
 
     internalSlaveID10.begin(); // inicializamos el mapa, quiza esto deberia ir en otro sitio. 
    
@@ -244,6 +245,7 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
         return false;  // TCP request en progreso, saltar este ciclo
     }
     rtuThreadLock.lock(); 
+    delay(sysConfig.interFrameDelay);
     
     int dataType = ModbusTcpBridge::getModbusClientDataType(slave->functionCode);
     
@@ -253,6 +255,7 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
         }
         lecturaExitosa = true;
     }
+    delay(sysConfig.interFrameDelay);
     rtuThreadLock.unlock(); 
 
     if (lecturaExitosa) {

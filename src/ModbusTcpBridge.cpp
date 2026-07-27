@@ -169,7 +169,10 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
     // Thread-safe block to protect the shared physical HW of the client bus (RS485)
     _tcpTransferActive = true;
     _lock->lock(); 
+    
+    delay(_interFrameDelay);
     bool success = processCommand(mbData);
+    delay(_interFrameDelay);
 
     // 3. Handle response routing or exception mapping based on RTU results
     if (success) {
@@ -422,6 +425,10 @@ void ModbusTcpBridge::setModbusClient(IModbusClient* mbClient){
 
 void ModbusTcpBridge::setThreadLock(IThreadLock* lock){
     _lock = (lock != nullptr) ? lock : &_defaultLock; 
+}
+
+void ModbusTcpBridge::setInterFrameDelay(uint32_t ms){
+    _interFrameDelay = ms;
 }
 
 /**

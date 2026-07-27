@@ -137,7 +137,7 @@ CSVSystemConfig SDgetSystemConfig(SDManager* _sd) {
                 strncpy(res.interFrameDelay, values[i], MAX_TEXT_SIZE - 1);
             } else if (strcmp(key, "Response Timeout (ms)") == 0) {
                 strncpy(res.responseTimeout, values[i], MAX_TEXT_SIZE - 1);
-            } else if (strcmp(key, "Attemp") == 0) {
+            } else if (strcmp(key, "Attemps") == 0) {
                 strncpy(res.attempts, values[i], MAX_TEXT_SIZE - 1);
             } else if (strcmp(key, "id") == 0) {
                 strncpy(res.internalSlaveId, values[i], MAX_TEXT_SIZE - 1);
