@@ -57,8 +57,7 @@ bool verifyConfigCRC(const EEPROMSystemConfig& cfg) {
     return computed == cfg.crc;
 }
 
-CSVSystemConfig SDgetSystemConfig(SDManager* _sd) { 
-    CSVSystemConfig res; 
+bool SDgetSystemConfig(SDManager* _sd, CSVSystemConfig& res) { 
     
     // Inicializar todas las cadenas con terminador nulo
     res.mac[0] = '\0';
@@ -78,7 +77,7 @@ CSVSystemConfig SDgetSystemConfig(SDManager* _sd) {
     res.internalSlaveId[0] = '\0';
 
     if (!_sd->isReady()) {
-        return res;
+        return false;
     }
 
     // "ssss" -> 4 columnas tipo string (Name; Value; Editable; coment)
@@ -139,13 +138,32 @@ CSVSystemConfig SDgetSystemConfig(SDManager* _sd) {
                 strncpy(res.responseTimeout, values[i], MAX_TEXT_SIZE - 1);
             } else if (strcmp(key, "Attemps") == 0) {
                 strncpy(res.attempts, values[i], MAX_TEXT_SIZE - 1);
-            } else if (strcmp(key, "id") == 0) {
+            } else if (strcmp(key, "Slave ID") == 0) {
                 strncpy(res.internalSlaveId, values[i], MAX_TEXT_SIZE - 1);
             }
         }
     }
 
-    return res; 
+    // Verificar que todos los campos obligatorios fueron encontrados
+    bool allFound = true;
+
+    if (res.mac[0] == '\0')        { ESP_LOGW(TAG, "CSV missing: mac address");   allFound = false; }
+    if (res.ip[0] == '\0')         { ESP_LOGW(TAG, "CSV missing: IP address");    allFound = false; }
+    if (res.gateway[0] == '\0')    { ESP_LOGW(TAG, "CSV missing: gateway");       allFound = false; }
+    if (res.subnet[0] == '\0')     { ESP_LOGW(TAG, "CSV missing: subnet");        allFound = false; }
+    if (res.dns[0] == '\0')        { ESP_LOGW(TAG, "CSV missing: dns");           allFound = false; }
+    if (res.port[0] == '\0')       { ESP_LOGW(TAG, "CSV missing: port");          allFound = false; }
+    if (res.baudrate[0] == '\0')   { ESP_LOGW(TAG, "CSV missing: baudrate");      allFound = false; }
+    if (res.txPin[0] == '\0')      { ESP_LOGW(TAG, "CSV missing: txPin");         allFound = false; }
+    if (res.dePin[0] == '\0')      { ESP_LOGW(TAG, "CSV missing: dePin");         allFound = false; }
+    if (res.rePin[0] == '\0')      { ESP_LOGW(TAG, "CSV missing: rePin");         allFound = false; }
+    if (res.rtuConfig[0] == '\0')  { ESP_LOGW(TAG, "CSV missing: RTU Config");    allFound = false; }
+    if (res.interFrameDelay[0] == '\0')  { ESP_LOGW(TAG, "CSV missing: Inter-frame delay (ms)"); allFound = false; }
+    if (res.responseTimeout[0] == '\0')  { ESP_LOGW(TAG, "CSV missing: Response Timeout (ms)");   allFound = false; }
+    if (res.attempts[0] == '\0')   { ESP_LOGW(TAG, "CSV missing: Attemps");       allFound = false; }
+    if (res.internalSlaveId[0] == '\0') { ESP_LOGW(TAG, "CSV missing: Slave ID");  allFound = false; }
+
+    return allFound; 
 }
 
 bool parseIP(const char* str, uint8_t out[4]) {
@@ -361,23 +379,24 @@ EEPROMSystemConfig rawToSystemConfig(const CSVSystemConfig& raw) {
 }
 
 void printConfig(const EEPROMSystemConfig& cfg) {
-    Serial.println("--- DATOS LEÍDOS DE LA EEPROM ---");
-    Serial.printf("Magic Key: 0x%X\n", cfg.magic);
-    Serial.printf("Version: %d\n", cfg.version);
-    Serial.printf("CRC16: 0x%04X\n", cfg.crc);
-    Serial.printf("MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+    
+    ESP_LOGI(TAG, "--- DATOS LEÍDOS DE LA EEPROM ---\n");
+    ESP_LOGI(TAG, "Magic Key: 0x%X\n", cfg.magic);
+    ESP_LOGI(TAG, "Version: %d\n", cfg.version);
+    ESP_LOGI(TAG, "CRC16: 0x%04X\n", cfg.crc);
+    ESP_LOGI(TAG, "MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
                   cfg.mac[0], cfg.mac[1], cfg.mac[2], cfg.mac[3], cfg.mac[4], cfg.mac[5]);
-    Serial.printf("IP: %d.%d.%d.%d\n", cfg.ip[0], cfg.ip[1], cfg.ip[2], cfg.ip[3]);
-    Serial.printf("Gateway: %d.%d.%d.%d\n", cfg.gateway[0], cfg.gateway[1], cfg.gateway[2], cfg.gateway[3]);
-    Serial.printf("Subnet: %d.%d.%d.%d\n", cfg.subnet[0], cfg.subnet[1], cfg.subnet[2], cfg.subnet[3]);
-    Serial.printf("DNS: %d.%d.%d.%d\n", cfg.dns[0], cfg.dns[1], cfg.dns[2], cfg.dns[3]);
-    Serial.printf("Puerto Modbus TCP: %d\n", cfg.modbusPort);
-    Serial.printf("Baudrate RTU: %d\n", cfg.baudrate);
-    Serial.printf("Pines RTU (TX/DE/RE): %d / %d / %d\n", cfg.txPin, cfg.dePin, cfg.rePin);
-    Serial.printf("Inter-frame delay: %d ms\n", cfg.interFrameDelay);
-    Serial.printf("Response Timeout: %d ms\n", cfg.responseTimeout);
-    Serial.printf("Attempts: %d\n", cfg.attempts);
-    Serial.printf("Internal Slave ID: %d\n", cfg.internal_slave_id);
-    Serial.println("---------------------------------");
+    ESP_LOGI(TAG,"IP: %d.%d.%d.%d\n", cfg.ip[0], cfg.ip[1], cfg.ip[2], cfg.ip[3]);
+    ESP_LOGI(TAG,"Gateway: %d.%d.%d.%d\n", cfg.gateway[0], cfg.gateway[1], cfg.gateway[2], cfg.gateway[3]);
+    ESP_LOGI(TAG,"Subnet: %d.%d.%d.%d\n", cfg.subnet[0], cfg.subnet[1], cfg.subnet[2], cfg.subnet[3]);
+    ESP_LOGI(TAG,"DNS: %d.%d.%d.%d\n", cfg.dns[0], cfg.dns[1], cfg.dns[2], cfg.dns[3]);
+    ESP_LOGI(TAG,"Puerto Modbus TCP: %d\n", cfg.modbusPort);
+    ESP_LOGI(TAG,"Baudrate RTU: %d\n", cfg.baudrate);
+    ESP_LOGI(TAG,"Pines RTU (TX/DE/RE): %d / %d / %d\n", cfg.txPin, cfg.dePin, cfg.rePin);
+    ESP_LOGI(TAG,"Inter-frame delay: %d ms\n", cfg.interFrameDelay);
+    ESP_LOGI(TAG,"Response Timeout: %d ms\n", cfg.responseTimeout);
+    ESP_LOGI(TAG,"Attempts: %d\n", cfg.attempts);
+    ESP_LOGI(TAG,"Internal Slave ID: %d\n", cfg.internal_slave_id);
+    ESP_LOGI(TAG,"---------------------------------\n");
 
 }

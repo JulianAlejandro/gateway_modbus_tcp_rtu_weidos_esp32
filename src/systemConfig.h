@@ -69,9 +69,10 @@ struct EEPROMSystemConfig {
 /**
  * @brief Lee el archivo CSV de configuración de la SD y llena la estructura SystemConfigRaw.
  * @param _sd Puntero al manejador de la tarjeta SD.
- * @return Estructura SystemConfigRaw con las cadenas extraídas.
+ * @param res Estructura de salida con las cadenas extraídas.
+ * @return true si se encontraron todos los campos, false si falta alguno.
  */
-CSVSystemConfig SDgetSystemConfig(SDManager* _sd);
+bool SDgetSystemConfig(SDManager* _sd, CSVSystemConfig& res);
 
 
 /**

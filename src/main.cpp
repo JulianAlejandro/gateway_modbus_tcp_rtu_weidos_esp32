@@ -116,9 +116,11 @@ void setup() {
     if(sdManager.begin() == ESP_OK){ // TODO mejorar 
         if(sdManager.exists(PARAM_FILE)){
             ESP_LOGI(TAG, "[SD] Archivo de configuración encontrado. Cargando...");
-            CSVSystemConfig configRaw = SDgetSystemConfig(&sdManager);
+            CSVSystemConfig configRaw;
 
-            if (!validateCSVConfig(configRaw)) {
+            if (!SDgetSystemConfig(&sdManager, configRaw)) {
+                ESP_LOGE(TAG, "[SD] Faltan parámetros en el CSV. Ignorando SD.");
+            } else if (!validateCSVConfig(configRaw)) {
                 ESP_LOGE(TAG, "[SD] Configuración CSV inválida. Ignorando SD.");
             } else {
                 EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
