@@ -120,8 +120,10 @@ void setup() {
 
             if (!SDgetSystemConfig(&sdManager, configRaw)) {
                 ESP_LOGE(TAG, "[SD] Faltan parámetros en el CSV. Ignorando SD.");
+                logErrorToSD(&sdManager, "Missing parameters in CSV");
             } else if (!validateCSVConfig(configRaw)) {
                 ESP_LOGE(TAG, "[SD] Configuración CSV inválida. Ignorando SD.");
+                logErrorToSD(&sdManager, "Invalid CSV configuration values");
             } else {
                 EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
 
@@ -133,8 +135,8 @@ void setup() {
             
         }else{
             ESP_LOGW(TAG, "[SD] Advertencia: La tarjeta SD está montada pero no contiene %s", PARAM_FILE);
+            logErrorToSD(&sdManager, "Config file not found: " PARAM_FILE);
         }
-        sdManager.end(); 
     }else{
         ESP_LOGW(TAG, "[SD] Tarjeta SD no detectada o fallo al montar.");
     }
@@ -144,11 +146,16 @@ void setup() {
 
         if(!loadConfigurationFromEEPROM(sysConfig)){
             ESP_LOGE(TAG, "[CRÍTICO] Fallo de SD y EEPROM inválida. Cargando valores por defecto (FLASH)...");
+            logErrorToSD(&sdManager, "EEPROM configuration invalid, loading defaults");
             sysConfig = DEFAULT_SYS_CONFIG;
             size_t dataLen = offsetof(EEPROMSystemConfig, crc);
             sysConfig.crc = calculateCRC16(reinterpret_cast<const uint8_t*>(&sysConfig), dataLen);
             E2PROM.put(0, sysConfig);
         } 
+    }
+
+    if (sdManager.isReady()) {
+        sdManager.end();
     }
     
     printConfig(sysConfig);

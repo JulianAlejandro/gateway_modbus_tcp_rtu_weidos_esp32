@@ -4,6 +4,7 @@
 #include <E2PROM.h>
 
 #define PARAM_FILE "/sysconf.csv"
+#define ERR_LOG_FILE "/ERR_LOG.TXT"
 #define MAX_TEXT_SIZE 32
 
 #define CONFIG_MAGIC_KEY 0x4D425331 // "MBS1" - Clave para verificar si la EEPROM está inicializada
@@ -88,4 +89,6 @@ bool validateCSVConfig(const CSVSystemConfig& raw);
 
 uint16_t calculateCRC16(const uint8_t* data, size_t length);
 bool verifyConfigCRC(const EEPROMSystemConfig& cfg);
+
+void logErrorToSD(SDManager* sd, const char* message);
 

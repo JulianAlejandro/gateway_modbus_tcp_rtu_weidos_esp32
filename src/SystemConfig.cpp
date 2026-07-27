@@ -400,3 +400,14 @@ void printConfig(const EEPROMSystemConfig& cfg) {
     ESP_LOGI(TAG,"---------------------------------\n");
 
 }
+
+void logErrorToSD(SDManager* sd, const char* message) {
+    if (!sd || !sd->isReady()) return;
+
+    File f = SD.open(ERR_LOG_FILE, FILE_WRITE);
+    if (!f) return;
+
+    f.printf("[%lu ms] %s\n", millis(), message);
+    f.flush();
+    f.close();
+}
