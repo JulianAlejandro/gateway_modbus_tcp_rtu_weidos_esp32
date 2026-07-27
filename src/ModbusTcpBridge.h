@@ -54,6 +54,8 @@ public:
      */
     ModbusTcpBridge(IModbusClient* mbClient, IThreadLock* lock = nullptr, uint16_t port = 502);
 
+    ~ModbusTcpBridge(); 
+
     /**
      * @brief Configures interface network parameters and starts the TCP server.
      */
@@ -87,7 +89,7 @@ public:
 
 private:   
     uint16_t _port;
-    WeidosEthernetServer _ethernetServer;  
+    WeidosEthernetServer* _ethernetServer = nullptr;  
     byte _modbusTcpBuffer[SIZE_MB_TCP_FRAME];
     IModbusClient* _mbClient;
 
