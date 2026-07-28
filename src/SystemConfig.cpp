@@ -407,7 +407,7 @@ void logErrorToSD(SDManager* sd, const char* message) {
     File f = SD.open(ERR_LOG_FILE, FILE_WRITE);
     if (!f) return;
 
-    f.printf("[%lu ms] %s\n", millis(), message);
+    f.printf("[%lu ms] Modbus TCP-RTU Gateway conf error: %s\n", millis(), message);
     f.flush();
     f.close();
 }

@@ -84,7 +84,7 @@ void checkTCPReqCallback(const modbusStruct& req) {
 
 void checkTCPDataCallback(const modbusStruct& req, uint16_t index, uint16_t& value) {
     for (uint8_t i = 0; i < NUM_SLAVES; i++) {
-        if (req.slaveID == slaves[i].slaveID && req.address == slaves[i].address && req.quantity_value == slaves[i].quantity && req.functionCode == slaves[i].functionCode) {
+        if (req.slaveID == slaves[i].slaveID && req.address == slaves[i].address && req.quantity_value >= slaves[i].quantity && req.functionCode == slaves[i].functionCode) {
             if (index < slaves[i].quantity) {
                 if (xSemaphoreTake(xModbusDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
                     slaves[i].rawBuffer[index] = value; 
