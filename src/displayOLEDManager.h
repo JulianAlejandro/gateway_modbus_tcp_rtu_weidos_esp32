@@ -5,7 +5,8 @@
 #include <U8g2lib.h>
 #include <WPriv_OLED128X32emasesa.h>  // Librería nativa con emasesa_icon y showLogo2LinesLeft
 
-const unsigned long INTERNAL_POLL_THRESHOLD = 30000; 
+constexpr unsigned long INTERNAL_POLL_THRESHOLD = 30000; 
+constexpr uint8_t MAX_REGISTER_QUANTITY = 2;
 #define STALE_TIMEOUT 60000 
 #define DISPLAY_INTERVAL 4000
 
@@ -23,7 +24,7 @@ struct ModbusSlaveData {
     const uint8_t functionCode;
 
 //variables    
-    uint16_t rawBuffer[2];
+    uint16_t rawBuffer[MAX_REGISTER_QUANTITY];
     float convertedData;
     bool flagUpdate;
     unsigned long lastTimeReference;

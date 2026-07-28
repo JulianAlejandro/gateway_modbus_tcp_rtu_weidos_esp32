@@ -35,7 +35,7 @@ void ModbusTcpBridge::begin(uint16_t port, byte mac[], IPAddress ip, IPAddress d
     
     Ethernet.init(ETHERNET_CS);
     Ethernet.begin(mac, ip, dns, gateway, subnet);
-    
+ 
     if (_ethernetServer) delete _ethernetServer;
     _ethernetServer = new WeidosEthernetServer(_port);
     _ethernetServer->begin(_port);
@@ -176,7 +176,12 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
     }
     // Thread-safe block to protect the shared physical HW of the client bus (RS485)
     _tcpTransferActive = true;
-    _lock->lock(); 
+    if (!_lock->lock(5000)) {
+        ESP_LOGE(TAG, "Failed to acquire RTU lock");
+        _tcpTransferActive = false;
+        sendTCPException(client, mbData, 0x0B); // Gateway Target Device Failed to Respond
+        return;
+    }
     
     delay(_interFrameDelay);
     bool success = processCommand(mbData);
@@ -196,8 +201,8 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         if (errorCode == ETIMEDOUT) { 
             exceptionCode = 0x0B; // Gateway Target Device Failed to Respond
         } else if (errorCode == EINVAL) {
-            exceptionCode = ILEGAL_DATA_VALUE; // Illegal Data Value
-        } else if (errorCode == CODE_ILEGAL_ADDRES){ 
+            exceptionCode = ILLEGAL_DATA_VALUE; // Illegal Data Value
+        } else if (errorCode == CODE_ILLEGAL_ADDRES){ 
             exceptionCode = 0x02; // Illegal Data Address
         }
         

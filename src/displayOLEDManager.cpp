@@ -80,16 +80,17 @@ void displayOLEDManager::prepareTextData(uint8_t idx) {
   } else if (currentLastUpload == 0) {
     strcpy(_cachedLine2, "unknown");
   } else {
-    String valStr = String(currentVal, decimals); 
+    char valBuf[16];
+    dtostrf(currentVal, 0, decimals, valBuf);
     
     if (1 < errCount && errCount < 5 ) {
-      snprintf(_cachedLine2, sizeof(_cachedLine2), "Stale %s %s", valStr.c_str(), _slaves[idx].unit);
+      snprintf(_cachedLine2, sizeof(_cachedLine2), "Stale %s %s", valBuf, _slaves[idx].unit);
     } 
     else if (isNewData) {
-      snprintf(_cachedLine2, sizeof(_cachedLine2), "->%s %s", valStr.c_str(), _slaves[idx].unit);
+      snprintf(_cachedLine2, sizeof(_cachedLine2), "->%s %s", valBuf, _slaves[idx].unit);
     } 
     else {
-      snprintf(_cachedLine2, sizeof(_cachedLine2), "%s %s", valStr.c_str(), _slaves[idx].unit);
+      snprintf(_cachedLine2, sizeof(_cachedLine2), "%s %s", valBuf, _slaves[idx].unit);
     }
   }
 }

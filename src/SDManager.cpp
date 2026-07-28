@@ -21,7 +21,7 @@ esp_err_t SDManager::begin() {
 
     // Intentamos montar la tarjeta
     if (!SD.begin()) {
-        ESP_LOGE(TAG, "Fallo crítico: No se pudo montar la tarjeta SD");
+        ESP_LOGE(TAG, "No se pudo montar la tarjeta SD");
         return ESP_ERR_SD_MOUNT;
     }
 

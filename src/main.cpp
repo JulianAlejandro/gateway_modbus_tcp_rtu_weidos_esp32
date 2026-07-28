@@ -56,11 +56,11 @@ displayOLEDManager disp;
 
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
-    { "CL2",    "ppm",   3,      1,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
-    { "COND",   "us",    1,      2,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
-    { "REDOX",  "mV",    1,      3,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
-    { "TURB",   "NTU",   3,      4,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0},
-    { "PH",     "pH",    2,      5,      0,      2,      0x03,      {0, 0},      0.0,      false,      0,      false,    0}
+    { "CL2",    "ppm",   3,      1,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "COND",   "us",    1,      2,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "REDOX",  "mV",    1,      3,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "TURB",   "NTU",   3,      4,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0},
+    { "PH",     "pH",    2,      5,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0}
 };
 
 const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
@@ -85,13 +85,15 @@ void checkTCPReqCallback(const modbusStruct& req) {
 void checkTCPDataCallback(const modbusStruct& req, uint16_t index, uint16_t& value) {
     for (uint8_t i = 0; i < NUM_SLAVES; i++) {
         if (req.slaveID == slaves[i].slaveID && req.address == slaves[i].address && req.quantity_value >= slaves[i].quantity && req.functionCode == slaves[i].functionCode) {
-            if (index < slaves[i].quantity) {
+            if (index < MAX_REGISTER_QUANTITY) {
                 if (xSemaphoreTake(xModbusDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
                     slaves[i].rawBuffer[index] = value; 
                     if (index == slaves[i].quantity - 1 ) { 
                         slaves[i].flagUpdate = true; 
                     }
                     xSemaphoreGive(xModbusDataMutex);
+                } else {
+                    ESP_LOGW(TAG, "Data mutex timeout for slave %d index %d", req.slaveID, index);
                 }
             }
             break; 
@@ -100,8 +102,15 @@ void checkTCPDataCallback(const modbusStruct& req, uint16_t index, uint16_t& val
 }
 
 void modbusGatewayTask(void * pvParameters) {
+    uint32_t loopCount = 0;
     for(;;) {
         modbusTcpBridge.process();
+
+        //if (++loopCount % 30000 == 0) {
+        //    UBaseType_t highWater = uxTaskGetStackHighWaterMark(NULL);
+        //    ESP_LOGI(TAG, "Gateway stack high water: %d bytes free", highWater * 4);
+        //}
+
         vTaskDelay(pdMS_TO_TICKS(1)); 
     }
 }
@@ -169,7 +178,11 @@ void setup() {
     xModbusDataMutex = xSemaphoreCreateMutex(); 
     xModbusRTUMutex = xSemaphoreCreateMutex(); 
 
-    if(xModbusDataMutex == NULL || xModbusRTUMutex == NULL) while(1);
+    if(xModbusDataMutex == NULL || xModbusRTUMutex == NULL) {
+        ESP_LOGE(TAG, "CRITICAL: Failed to create mutexes!");
+        delay(1000);
+        esp_restart();
+    }
 
     rtuThreadLock.init(xModbusRTUMutex); 
 
@@ -250,10 +263,10 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     bool lecturaExitosa = false;
 
     // Sincronización directa usando el objeto (eliminado el check de nullptr)
-    if (modbusTcpBridge.isTcpTransferActive()) {
-        return false;  // TCP request en progreso, saltar este ciclo
+    // C1: tryLock elimina la race condition entre isTcpTransferActive() y lock()
+    if (!rtuThreadLock.tryLock(100)) {
+        return false;  // TCP request en progreso o mutex ocupado
     }
-    rtuThreadLock.lock(); 
     delay(sysConfig.interFrameDelay);
     
     int dataType = ModbusTcpBridge::getModbusClientDataType(slave->functionCode);
