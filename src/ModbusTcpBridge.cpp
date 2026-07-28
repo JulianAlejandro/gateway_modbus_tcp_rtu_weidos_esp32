@@ -139,7 +139,15 @@ void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqu
         client.stop();
         return; // de momento machacamos no devolvemos nada
     }
-    
+
+    // S1: Validate minimum frame length (MBAP 7 bytes + UnitID 1 + FC 1 + Address 2 + Quantity 2 = 12 min)
+    uint16_t frameLength = 6 + (((uint16_t)_modbusTcpBuffer[4] << 8) | _modbusTcpBuffer[5]);
+    if (frameLength < 12) {
+        ESP_LOGE(TAG, "Frame too short: %d bytes (minimum 12). Discarding.", frameLength);
+        client.stop();
+        return;
+    }
+
     modbusStruct mbData;
             
     // 1. Validate and parse the TCP buffer. Send immediate exception if Function Code is unsupported.
@@ -228,6 +236,13 @@ bool ModbusTcpBridge::processCommand(const modbusStruct& mbData) {
             }
             int coilsWritten = 0;
             uint8_t byteCount = _modbusTcpBuffer[12];
+
+            // S2: Validate byteCount against actual frame length
+            uint16_t frameLen = 6 + (((uint16_t)_modbusTcpBuffer[4] << 8) | _modbusTcpBuffer[5]);
+            if ((uint16_t)(13 + byteCount) > frameLen) {
+                ESP_LOGE(TAG, "FC 0x0F: byteCount %d exceeds frame length %d", byteCount, frameLen);
+                return false;
+            }
             
             for (int i = 0; i < byteCount; i++) {
                 uint8_t currentByte = _modbusTcpBuffer[13 + i];
@@ -250,6 +265,14 @@ bool ModbusTcpBridge::processCommand(const modbusStruct& mbData) {
             if (_mbClient->beginTransmission(mbData.slaveID, HOLDING_REGISTERS, mbData.address, mbData.quantity_value) != 1) {
                 return false;
             }
+
+            // S3: Validate quantity_value against actual frame length
+            uint16_t frameLen = 6 + (((uint16_t)_modbusTcpBuffer[4] << 8) | _modbusTcpBuffer[5]);
+            if ((uint16_t)(13 + (mbData.quantity_value * 2)) > frameLen) {
+                ESP_LOGE(TAG, "FC 0x10: quantity %d exceeds frame length %d", mbData.quantity_value, frameLen);
+                return false;
+            }
+
             int tcpIndex = 13; // Payload data starts at index 13
             for (int i = 0; i < mbData.quantity_value; i++) {
                 uint16_t registerValue = (_modbusTcpBuffer[tcpIndex] << 8) | _modbusTcpBuffer[tcpIndex + 1];
@@ -415,6 +438,12 @@ bool ModbusTcpBridge::parseTCPBufferToStruct(const byte* tcp_buf, modbusStruct* 
   out_struct->functionCode   = fCode;
   out_struct->address        = (tcp_buf[8] << 8) | tcp_buf[9];
   out_struct->quantity_value = (tcp_buf[10] << 8) | tcp_buf[11]; 
+
+  // S4: Validate protocol ID (must be 0x0000 per Modbus TCP spec)
+  if (out_struct->protocolID != 0x0000) {
+    ESP_LOGE(TAG, "Invalid Protocol ID: 0x%04X (expected 0x0000)", out_struct->protocolID);
+    return false;
+  }
   
   return true;
 }

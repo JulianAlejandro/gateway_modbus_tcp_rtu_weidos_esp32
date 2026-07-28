@@ -169,6 +169,7 @@ bool SDgetSystemConfig(SDManager* _sd, CSVSystemConfig& res) {
 bool parseIP(const char* str, uint8_t out[4]) {
     int a, b, c, d;
     if (sscanf(str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4) {
+        if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255) return false;
         out[0] = (uint8_t)a;
         out[1] = (uint8_t)b;
         out[2] = (uint8_t)c;
@@ -181,7 +182,10 @@ bool parseIP(const char* str, uint8_t out[4]) {
 bool parseMAC(const char* str, uint8_t out[6]) {
     int m[6];
     if (sscanf(str, "%x:%x:%x:%x:%x:%x", &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]) == 6) {
-        for(int i = 0; i < 6; i++) out[i] = (uint8_t)m[i];
+        for(int i = 0; i < 6; i++) {
+            if (m[i] < 0 || m[i] > 255) return false;
+            out[i] = (uint8_t)m[i];
+        }
         return true;
     }
     return false;
