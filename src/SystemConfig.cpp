@@ -383,25 +383,25 @@ EEPROMSystemConfig rawToSystemConfig(const CSVSystemConfig& raw) {
 }
 
 void printConfig(const EEPROMSystemConfig& cfg) {
-    
-    ESP_LOGI(TAG, "--- DATOS LEÍDOS DE LA EEPROM ---\n");
-    ESP_LOGI(TAG, "Magic Key: 0x%X\n", cfg.magic);
-    ESP_LOGI(TAG, "Version: %d\n", cfg.version);
-    ESP_LOGI(TAG, "CRC16: 0x%04X\n", cfg.crc);
-    ESP_LOGI(TAG, "MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+
+    Serial.println("---- DATOS LEÍDOS ----");
+    //Serial.printf("Magic Key: 0x%X\r\n", cfg.magic);
+    //Serial.printf("Version: %d\r\n", cfg.version);
+    //Serial.printf("CRC16: 0x%04X\r\n", cfg.crc);
+    Serial.printf("MAC: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
                   cfg.mac[0], cfg.mac[1], cfg.mac[2], cfg.mac[3], cfg.mac[4], cfg.mac[5]);
-    ESP_LOGI(TAG,"IP: %d.%d.%d.%d\n", cfg.ip[0], cfg.ip[1], cfg.ip[2], cfg.ip[3]);
-    ESP_LOGI(TAG,"Gateway: %d.%d.%d.%d\n", cfg.gateway[0], cfg.gateway[1], cfg.gateway[2], cfg.gateway[3]);
-    ESP_LOGI(TAG,"Subnet: %d.%d.%d.%d\n", cfg.subnet[0], cfg.subnet[1], cfg.subnet[2], cfg.subnet[3]);
-    ESP_LOGI(TAG,"DNS: %d.%d.%d.%d\n", cfg.dns[0], cfg.dns[1], cfg.dns[2], cfg.dns[3]);
-    ESP_LOGI(TAG,"Puerto Modbus TCP: %d\n", cfg.modbusPort);
-    ESP_LOGI(TAG,"Baudrate RTU: %d\n", cfg.baudrate);
-    ESP_LOGI(TAG,"Pines RTU (TX/DE/RE): %d / %d / %d\n", cfg.txPin, cfg.dePin, cfg.rePin);
-    ESP_LOGI(TAG,"Inter-frame delay: %d ms\n", cfg.interFrameDelay);
-    ESP_LOGI(TAG,"Response Timeout: %d ms\n", cfg.responseTimeout);
-    ESP_LOGI(TAG,"Attempts: %d\n", cfg.attempts);
-    ESP_LOGI(TAG,"Internal Slave ID: %d\n", cfg.internal_slave_id);
-    ESP_LOGI(TAG,"---------------------------------\n");
+    Serial.printf("IP: %d.%d.%d.%d\r\n", cfg.ip[0], cfg.ip[1], cfg.ip[2], cfg.ip[3]);
+    Serial.printf("Gateway: %d.%d.%d.%d\r\n", cfg.gateway[0], cfg.gateway[1], cfg.gateway[2], cfg.gateway[3]);
+    Serial.printf("Subnet: %d.%d.%d.%d\r\n", cfg.subnet[0], cfg.subnet[1], cfg.subnet[2], cfg.subnet[3]);
+    Serial.printf("DNS: %d.%d.%d.%d\r\n", cfg.dns[0], cfg.dns[1], cfg.dns[2], cfg.dns[3]);
+    Serial.printf("Puerto Modbus TCP: %d\r\n", cfg.modbusPort);
+    Serial.printf("Baudrate RTU: %d\r\n", cfg.baudrate);
+    Serial.printf("Pines RTU (TX/DE/RE): %d / %d / %d\r\n", cfg.txPin, cfg.dePin, cfg.rePin);
+    Serial.printf("Inter-frame delay: %d ms\r\n", cfg.interFrameDelay);
+    Serial.printf("Response Timeout: %d ms\r\n", cfg.responseTimeout);
+    Serial.printf("Attempts: %d\r\n", cfg.attempts);
+    Serial.printf("Internal Slave ID: %d\r\n", cfg.internal_slave_id);
+    Serial.println("---------------------------------");
 
 }
 

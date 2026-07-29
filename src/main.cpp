@@ -1,6 +1,5 @@
 #include <Arduino.h>
 
-//#include "FuncInternalClientOLED.h" // La cabecera gestiona el 'extern' de slaves
 #include "displayOLEDManager.h"
 
 #include "ModbusRtuLock.h"
@@ -56,11 +55,11 @@ displayOLEDManager disp;
 
 // --- ARRAY CON CONFIGURACIÓN DE ATRIBUTOS ---
 ModbusSlaveData slaves[] = {
-    { "CL2",    "ppm",   3,      1,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0},
-    { "COND",   "us",    1,      2,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0},
-    { "REDOX",  "mV",    1,      3,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0},
-    { "TURB",   "NTU",   3,      4,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0},
-    { "PH",     "pH",    2,      5,      0,     MAX_REGISTER_QUANTITY,    0x03,      {0, 0},      0.0,      false,      0,      false,    0}
+    { "CL2",    "ppm",   3,     1,     0,     MAX_REGISTER_QUANTITY,    0x03,     {0, 0},     0.0,      false,      0,      false,    0},
+    { "COND",   "us",    1,     2,     0,     MAX_REGISTER_QUANTITY,    0x03,     {0, 0},     0.0,      false,      0,      false,    0},
+    { "REDOX",  "mV",    1,     3,     0,     MAX_REGISTER_QUANTITY,    0x03,     {0, 0},     0.0,      false,      0,      false,    0},
+    { "TURB",   "NTU",   3,     4,     0,     MAX_REGISTER_QUANTITY,    0x03,     {0, 0},     0.0,      false,      0,      false,    0},
+    { "PH",     "pH",    2,     5,     0,     MAX_REGISTER_QUANTITY,    0x03,     {0, 0},     0.0,      false,      0,      false,    0}
 };
 
 const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
@@ -68,7 +67,7 @@ const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
 void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave);
-bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg);   
+bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg);
 
 // NOTE: Modifies _mbClient and _lock per-request. Safe because this callback
 // and all usage run sequentially in modbusGatewayTask with no preemption.
@@ -211,7 +210,8 @@ void setup() {
     for(int i = 0; i < NUM_SLAVES; i++ ){ 
         reqSlaveInternalClient(&slaves[i]); 
     }
-
+    Serial.println(); 
+    Serial.println("Gateway ready.");
     delay(1000);
 }
 
