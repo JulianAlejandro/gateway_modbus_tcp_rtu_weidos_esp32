@@ -211,7 +211,7 @@ void setup() {
         reqSlaveInternalClient(&slaves[i]); 
     }
     Serial.println(); 
-    Serial.println("Gateway ready.");
+    Serial.println("Gateway runing...");
     delay(1000);
 }
 
