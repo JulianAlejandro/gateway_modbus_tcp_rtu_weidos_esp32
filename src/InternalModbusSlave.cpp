@@ -39,10 +39,11 @@ bool InternalModbusSlave::begin() {
     for (int i = 0; i < NUM_DISCRETE; i++) {
         pinMode(pinDiscreteInputs[i], INPUT);
     }
+    /* ERROR
     for (int i = 0; i < NUM_HOLDING_REGS; i++) {
         pinMode(pinHoldingRegisters[i], OUTPUT);
     }
-    
+    */
     // Inicializar registros espejo a 0
     memset(_shadowCoils, 0, sizeof(_shadowCoils));
     memset(_shadowHoldingRegs, 0, sizeof(_shadowHoldingRegs));
