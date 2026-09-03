@@ -100,6 +100,12 @@ bool SDgetSystemConfig(SDManager* _sd, CSVSystemConfig& res) {
     char **values = (char**)cp[1]; // Columna 1: Value
 
     int rowCount = cp.getRowsCount();
+    Serial.printf("  [SD_GET] Parsed %d rows from CSV_Parser\n", rowCount);
+
+    if (names == nullptr || values == nullptr) {
+        Serial.printf("  [SD_GET] PARSE ERROR: names=%p values=%p\n", names, values);
+        return false;
+    }
 
     if (names != nullptr && values != nullptr) {
         for (int i = 0; i < rowCount; i++) {
@@ -146,22 +152,29 @@ bool SDgetSystemConfig(SDManager* _sd, CSVSystemConfig& res) {
 
     // Verificar que todos los campos obligatorios fueron encontrados
     bool allFound = true;
+    int missingCount = 0;
 
-    if (res.mac[0] == '\0')        { ESP_LOGW(TAG, "CSV missing: mac address");   allFound = false; }
-    if (res.ip[0] == '\0')         { ESP_LOGW(TAG, "CSV missing: IP address");    allFound = false; }
-    if (res.gateway[0] == '\0')    { ESP_LOGW(TAG, "CSV missing: gateway");       allFound = false; }
-    if (res.subnet[0] == '\0')     { ESP_LOGW(TAG, "CSV missing: subnet");        allFound = false; }
-    if (res.dns[0] == '\0')        { ESP_LOGW(TAG, "CSV missing: dns");           allFound = false; }
-    if (res.port[0] == '\0')       { ESP_LOGW(TAG, "CSV missing: port");          allFound = false; }
-    if (res.baudrate[0] == '\0')   { ESP_LOGW(TAG, "CSV missing: baudrate");      allFound = false; }
-    if (res.txPin[0] == '\0')      { ESP_LOGW(TAG, "CSV missing: txPin");         allFound = false; }
-    if (res.dePin[0] == '\0')      { ESP_LOGW(TAG, "CSV missing: dePin");         allFound = false; }
-    if (res.rePin[0] == '\0')      { ESP_LOGW(TAG, "CSV missing: rePin");         allFound = false; }
-    if (res.rtuConfig[0] == '\0')  { ESP_LOGW(TAG, "CSV missing: RTU Config");    allFound = false; }
-    if (res.interFrameDelay[0] == '\0')  { ESP_LOGW(TAG, "CSV missing: Inter-frame delay (ms)"); allFound = false; }
-    if (res.responseTimeout[0] == '\0')  { ESP_LOGW(TAG, "CSV missing: Response Timeout (ms)");   allFound = false; }
-    if (res.attempts[0] == '\0')   { ESP_LOGW(TAG, "CSV missing: Attemps");       allFound = false; }
-    if (res.internalSlaveId[0] == '\0') { ESP_LOGW(TAG, "CSV missing: Slave ID");  allFound = false; }
+    if (res.mac[0] == '\0')        { Serial.printf("  [SD_GET] MISSING: mac address\n");   allFound = false; missingCount++; }
+    if (res.ip[0] == '\0')         { Serial.printf("  [SD_GET] MISSING: IP address\n");    allFound = false; missingCount++; }
+    if (res.gateway[0] == '\0')    { Serial.printf("  [SD_GET] MISSING: gateway\n");       allFound = false; missingCount++; }
+    if (res.subnet[0] == '\0')     { Serial.printf("  [SD_GET] MISSING: subnet\n");        allFound = false; missingCount++; }
+    if (res.dns[0] == '\0')        { Serial.printf("  [SD_GET] MISSING: dns\n");           allFound = false; missingCount++; }
+    if (res.port[0] == '\0')       { Serial.printf("  [SD_GET] MISSING: port\n");          allFound = false; missingCount++; }
+    if (res.baudrate[0] == '\0')   { Serial.printf("  [SD_GET] MISSING: baudrate\n");      allFound = false; missingCount++; }
+    if (res.txPin[0] == '\0')      { Serial.printf("  [SD_GET] MISSING: txPin\n");         allFound = false; missingCount++; }
+    if (res.dePin[0] == '\0')      { Serial.printf("  [SD_GET] MISSING: dePin\n");         allFound = false; missingCount++; }
+    if (res.rePin[0] == '\0')      { Serial.printf("  [SD_GET] MISSING: rePin\n");         allFound = false; missingCount++; }
+    if (res.rtuConfig[0] == '\0')  { Serial.printf("  [SD_GET] MISSING: RTU Config\n");    allFound = false; missingCount++; }
+    if (res.interFrameDelay[0] == '\0')  { Serial.printf("  [SD_GET] MISSING: Inter-frame delay\n"); allFound = false; missingCount++; }
+    if (res.responseTimeout[0] == '\0')  { Serial.printf("  [SD_GET] MISSING: Response Timeout\n");   allFound = false; missingCount++; }
+    if (res.attempts[0] == '\0')   { Serial.printf("  [SD_GET] MISSING: Attempts\n");      allFound = false; missingCount++; }
+    if (res.internalSlaveId[0] == '\0') { Serial.printf("  [SD_GET] MISSING: Slave ID\n");  allFound = false; missingCount++; }
+
+    if (allFound) {
+        Serial.printf("  [SD_GET] All 15 fields OK\n");
+    } else {
+        Serial.printf("  [SD_GET] %d fields missing\n", missingCount);
+    }
 
     return allFound; 
 }
