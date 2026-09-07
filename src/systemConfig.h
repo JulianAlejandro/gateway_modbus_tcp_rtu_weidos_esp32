@@ -3,6 +3,12 @@
 #include "SDManager.h"
 #include <E2PROM.h>
 
+enum ConfigSource {
+    CONFIG_FROM_SD,
+    CONFIG_FROM_EEPROM,
+    CONFIG_FROM_DEFAULT
+};
+
 #define PARAM_FILE "/sysconf.csv"
 #define ERR_LOG_FILE "/ERR_LOG.TXT"
 #define MAX_TEXT_SIZE 32
@@ -91,4 +97,8 @@ uint16_t calculateCRC16(const uint8_t* data, size_t length);
 bool verifyConfigCRC(const EEPROMSystemConfig& cfg);
 
 void logErrorToSD(SDManager* sd, const char* message);
+
+bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg);
+
+ConfigSource loadSystemConfig(SDManager* sdManager, EEPROMSystemConfig& config, const EEPROMSystemConfig& defaultConfig);
 

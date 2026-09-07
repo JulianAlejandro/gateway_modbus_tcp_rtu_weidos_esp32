@@ -421,77 +421,19 @@ static const EEPROMSystemConfig TEST_DEFAULT_CONFIG = {
 
 SDManager testSdManager;
 
-static bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg) {
-    E2PROM.begin();
-    E2PROM.get(0, cfg);
-
-    if (cfg.magic != CONFIG_MAGIC_KEY) {
-        Serial.println("  Magic Key no coincide.");
-        return false;
+static const char* configSourceToString(ConfigSource src) {
+    switch (src) {
+        case CONFIG_FROM_SD: return "SD";
+        case CONFIG_FROM_EEPROM: return "EEPROM";
+        case CONFIG_FROM_DEFAULT: return "DEFAULT";
+        default: return "UNKNOWN";
     }
-    if (cfg.version != CONFIG_VERSION) {
-        Serial.printf("  Version incompatible (%d != %d).\n", cfg.version, CONFIG_VERSION);
-        return false;
-    }
-    if (!verifyConfigCRC(cfg)) {
-        Serial.println("  CRC invalido.");
-        return false;
-    }
-    Serial.println("  EEPROM validada OK.");
-    return true;
 }
 
 const char* runConfigLoading(void) {
     EEPROMSystemConfig testCfg = TEST_DEFAULT_CONFIG;
-
-    E2PROM.begin();
-
-    bool loadedFromSD = false;
-    esp_err_t sdResult = testSdManager.begin();
-    Serial.printf("  [DEBUG] SD begin: %s\n", sdResult == ESP_OK ? "OK" : "FAIL");
-
-    if (sdResult == ESP_OK) {
-        bool fileExists = testSdManager.exists(PARAM_FILE);
-        Serial.printf("  [DEBUG] File '%s' exists: %s\n", PARAM_FILE, fileExists ? "YES" : "NO");
-
-        if (fileExists) {
-            CSVSystemConfig configRaw;
-            memset(&configRaw, 0, sizeof(configRaw));
-
-            bool readOk = SDgetSystemConfig(&testSdManager, configRaw);
-            Serial.printf("  [DEBUG] SDgetSystemConfig: %s\n", readOk ? "OK" : "FAIL");
-
-            if (readOk) {
-                bool validOk = validateCSVConfig(configRaw);
-                Serial.printf("  [DEBUG] validateCSVConfig: %s\n", validOk ? "OK" : "FAIL");
-
-                if (validOk) {
-                    EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
-                    E2PROM.put(0, configFromSD);
-                    testCfg = configFromSD;
-                    loadedFromSD = true;
-                }
-            }
-        }
-    }
-
-    if (!loadedFromSD) {
-        if (!loadConfigurationFromEEPROM(testCfg)) {
-            testCfg = TEST_DEFAULT_CONFIG;
-            size_t dataLen = offsetof(EEPROMSystemConfig, crc);
-            testCfg.crc = calculateCRC16(
-                reinterpret_cast<const uint8_t*>(&testCfg), dataLen);
-            E2PROM.put(0, testCfg);
-            if (testSdManager.isReady()) testSdManager.end();
-            return "DEFAULT";
-        } else {
-            if (testSdManager.isReady()) testSdManager.end();
-            return "EEPROM";
-        }
-    }
-
-    if (testSdManager.isReady()) testSdManager.end();
-    return "SD";
+    ConfigSource src = loadSystemConfig(&testSdManager, testCfg, TEST_DEFAULT_CONFIG);
+    return configSourceToString(src);
 }
 
 void test_integration_eeprom_wipe_loads_default(void) {

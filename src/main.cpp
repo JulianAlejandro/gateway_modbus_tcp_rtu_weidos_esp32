@@ -67,7 +67,6 @@ const uint8_t NUM_SLAVES = sizeof(slaves) / sizeof(slaves[0]);
 void checkSlaveFlagsAndTimeouts();
 void updateSlave(ModbusSlaveData* slave);
 bool reqSlaveInternalClient(ModbusSlaveData* slave);
-bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg);
 
 // NOTE: Modifies _mbClient and _lock per-request. Safe because this callback
 // and all usage run sequentially in modbusGatewayTask with no preemption.
@@ -118,53 +117,10 @@ void setup() {
     Serial.begin(115200);
     while(!Serial){}
 
-    E2PROM.begin(); 
-
-    bool loadedFromSD = false;
-    if(sdManager.begin() == ESP_OK){ // TODO mejorar 
-        if(sdManager.exists(PARAM_FILE)){
-            ESP_LOGI(TAG, "[SD] Archivo de configuración encontrado. Cargando...");
-            CSVSystemConfig configRaw;
-
-            if (!SDgetSystemConfig(&sdManager, configRaw)) {
-                ESP_LOGE(TAG, "[SD] Faltan parámetros en el CSV. Ignorando SD.");
-                logErrorToSD(&sdManager, "Missing parameters in CSV");
-            } else if (!validateCSVConfig(configRaw)) {
-                ESP_LOGE(TAG, "[SD] Configuración CSV inválida. Ignorando SD.");
-                logErrorToSD(&sdManager, "Invalid CSV configuration values");
-            } else {
-                EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
-
-                E2PROM.put(0, configFromSD);
-                sysConfig = configFromSD;
-                loadedFromSD = true; 
-                ESP_LOGI(TAG, "[SD -> EEPROM] Configuración guardada en EEPROM exitosamente.");
-            }
-            
-        }else{
-            ESP_LOGW(TAG, "[SD] Advertencia: La tarjeta SD está montada pero no contiene %s", PARAM_FILE);
-            logErrorToSD(&sdManager, "Config file not found: " PARAM_FILE);
-        }
-    }else{
-        ESP_LOGW(TAG, "[SD] Tarjeta SD no detectada o fallo al montar.");
-    }
-
-    if (!loadedFromSD) {
-        ESP_LOGI(TAG, "[EEPROM] Intentando cargar configuración desde EEPROM...");
-
-        if(!loadConfigurationFromEEPROM(sysConfig)){
-            ESP_LOGE(TAG, "[CRÍTICO] Fallo de SD y EEPROM inválida. Cargando valores por defecto (FLASH)...");
-            logErrorToSD(&sdManager, "EEPROM configuration invalid, loading defaults");
-            sysConfig = DEFAULT_SYS_CONFIG;
-            size_t dataLen = offsetof(EEPROMSystemConfig, crc);
-            sysConfig.crc = calculateCRC16(reinterpret_cast<const uint8_t*>(&sysConfig), dataLen);
-            E2PROM.put(0, sysConfig);
-        } 
-    }
-
-    if (sdManager.isReady()) {
-        sdManager.end();
-    }
+    ConfigSource configSource = loadSystemConfig(&sdManager, sysConfig, DEFAULT_SYS_CONFIG);
+    Serial.printf("Configuration loaded from: %s\r\n", 
+             configSource == CONFIG_FROM_SD ? "SD" : 
+             configSource == CONFIG_FROM_EEPROM ? "EEPROM" : "DEFAULT");
     
     printConfig(sysConfig);
 
@@ -290,28 +246,4 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
         }
     } 
     return lecturaExitosa; 
-}
-
-bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg) {
-    E2PROM.begin();
-    E2PROM.get(0, cfg);
-
-    if (cfg.magic != CONFIG_MAGIC_KEY) {
-        ESP_LOGE(TAG, "Magic Key no coincide. EEPROM no inicializada.");
-        return false;
-    }
-
-    if (cfg.version != CONFIG_VERSION) {
-        ESP_LOGW(TAG, "Version incompatible (EEPROM: %d, FW: %d). Re-inicializando.",
-                 cfg.version, CONFIG_VERSION);
-        return false;
-    }
-
-    if (!verifyConfigCRC(cfg)) {
-        ESP_LOGE(TAG, "CRC invalido. Datos EEPROM corruptos.");
-        return false;
-    }
-
-    ESP_LOGI(TAG, "Configuracion EEPROM validada (v%d, CRC ok).", cfg.version);
-    return true;
 }

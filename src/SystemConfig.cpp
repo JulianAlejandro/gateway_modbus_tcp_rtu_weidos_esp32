@@ -100,10 +100,12 @@ bool SDgetSystemConfig(SDManager* _sd, CSVSystemConfig& res) {
     char **values = (char**)cp[1]; // Columna 1: Value
 
     int rowCount = cp.getRowsCount();
-    Serial.printf("  [SD_GET] Parsed %d rows from CSV_Parser\n", rowCount);
+    //Serial.printf("  [SD_GET] Parsed %d rows from CSV_Parser\n", rowCount);
+    ESP_LOGI(TAG, "Parsed %d rows from CSV_Parser\n", rowCount);
 
     if (names == nullptr || values == nullptr) {
-        Serial.printf("  [SD_GET] PARSE ERROR: names=%p values=%p\n", names, values);
+        //Serial.printf("  [SD_GET] PARSE ERROR: names=%p values=%p\n", names, values);
+        ESP_LOGE(TAG, "PARSE ERROR: names=%p values=%p\n", names, values);
         return false;
     }
 
@@ -154,26 +156,26 @@ bool SDgetSystemConfig(SDManager* _sd, CSVSystemConfig& res) {
     bool allFound = true;
     int missingCount = 0;
 
-    if (res.mac[0] == '\0')        { Serial.printf("  [SD_GET] MISSING: mac address\n");   allFound = false; missingCount++; }
-    if (res.ip[0] == '\0')         { Serial.printf("  [SD_GET] MISSING: IP address\n");    allFound = false; missingCount++; }
-    if (res.gateway[0] == '\0')    { Serial.printf("  [SD_GET] MISSING: gateway\n");       allFound = false; missingCount++; }
-    if (res.subnet[0] == '\0')     { Serial.printf("  [SD_GET] MISSING: subnet\n");        allFound = false; missingCount++; }
-    if (res.dns[0] == '\0')        { Serial.printf("  [SD_GET] MISSING: dns\n");           allFound = false; missingCount++; }
-    if (res.port[0] == '\0')       { Serial.printf("  [SD_GET] MISSING: port\n");          allFound = false; missingCount++; }
-    if (res.baudrate[0] == '\0')   { Serial.printf("  [SD_GET] MISSING: baudrate\n");      allFound = false; missingCount++; }
-    if (res.txPin[0] == '\0')      { Serial.printf("  [SD_GET] MISSING: txPin\n");         allFound = false; missingCount++; }
-    if (res.dePin[0] == '\0')      { Serial.printf("  [SD_GET] MISSING: dePin\n");         allFound = false; missingCount++; }
-    if (res.rePin[0] == '\0')      { Serial.printf("  [SD_GET] MISSING: rePin\n");         allFound = false; missingCount++; }
-    if (res.rtuConfig[0] == '\0')  { Serial.printf("  [SD_GET] MISSING: RTU Config\n");    allFound = false; missingCount++; }
-    if (res.interFrameDelay[0] == '\0')  { Serial.printf("  [SD_GET] MISSING: Inter-frame delay\n"); allFound = false; missingCount++; }
-    if (res.responseTimeout[0] == '\0')  { Serial.printf("  [SD_GET] MISSING: Response Timeout\n");   allFound = false; missingCount++; }
-    if (res.attempts[0] == '\0')   { Serial.printf("  [SD_GET] MISSING: Attempts\n");      allFound = false; missingCount++; }
-    if (res.internalSlaveId[0] == '\0') { Serial.printf("  [SD_GET] MISSING: Slave ID\n");  allFound = false; missingCount++; }
+    if (res.mac[0] == '\0')        { ESP_LOGE(TAG, "MISSING: mac address\n");   allFound = false; missingCount++; }
+    if (res.ip[0] == '\0')         { ESP_LOGE(TAG, "MISSING: IP address\n");    allFound = false; missingCount++; }
+    if (res.gateway[0] == '\0')    { ESP_LOGE(TAG, "MISSING: gateway\n");       allFound = false; missingCount++; }
+    if (res.subnet[0] == '\0')     { ESP_LOGE(TAG, "MISSING: subnet\n");        allFound = false; missingCount++; }
+    if (res.dns[0] == '\0')        { ESP_LOGE(TAG, "MISSING: dns\n");           allFound = false; missingCount++; }
+    if (res.port[0] == '\0')       { ESP_LOGE(TAG, "MISSING: port\n");          allFound = false; missingCount++; }
+    if (res.baudrate[0] == '\0')   { ESP_LOGE(TAG, "MISSING: baudrate\n");      allFound = false; missingCount++; }
+    if (res.txPin[0] == '\0')      { ESP_LOGE(TAG, "MISSING: txPin\n");         allFound = false; missingCount++; }
+    if (res.dePin[0] == '\0')      { ESP_LOGE(TAG, "MISSING: dePin\n");         allFound = false; missingCount++; }
+    if (res.rePin[0] == '\0')      { ESP_LOGE(TAG, "MISSING: rePin\n");         allFound = false; missingCount++; }
+    if (res.rtuConfig[0] == '\0')  { ESP_LOGE(TAG, "MISSING: RTU Config\n");    allFound = false; missingCount++; }
+    if (res.interFrameDelay[0] == '\0')  { ESP_LOGE(TAG,"MISSING: Inter-frame delay\n"); allFound = false; missingCount++; }
+    if (res.responseTimeout[0] == '\0')  { ESP_LOGE(TAG,"MISSING: Response Timeout\n");   allFound = false; missingCount++; }
+    if (res.attempts[0] == '\0')   { ESP_LOGE(TAG,"MISSING: Attempts\n");      allFound = false; missingCount++; }
+    if (res.internalSlaveId[0] == '\0') { ESP_LOGE(TAG,"MISSING: Slave ID\n");  allFound = false; missingCount++; }
 
     if (allFound) {
-        Serial.printf("  [SD_GET] All 15 fields OK\n");
+        ESP_LOGD(TAG,"All 15 fields OK\n");
     } else {
-        Serial.printf("  [SD_GET] %d fields missing\n", missingCount);
+        ESP_LOGE(TAG," %d fields missing\n", missingCount);
     }
 
     return allFound; 
@@ -397,7 +399,7 @@ EEPROMSystemConfig rawToSystemConfig(const CSVSystemConfig& raw) {
 
 void printConfig(const EEPROMSystemConfig& cfg) {
 
-    Serial.println("---- DATOS LEÍDOS ----");
+    Serial.println("---- DATA ----");
     //Serial.printf("Magic Key: 0x%X\r\n", cfg.magic);
     //Serial.printf("Version: %d\r\n", cfg.version);
     //Serial.printf("CRC16: 0x%04X\r\n", cfg.crc);
@@ -427,4 +429,80 @@ void logErrorToSD(SDManager* sd, const char* message) {
     f.printf("[%lu ms] Modbus TCP-RTU Gateway conf error: %s\n", millis(), message);
     f.flush();
     f.close();
+}
+
+bool loadConfigurationFromEEPROM(EEPROMSystemConfig& cfg) {
+    E2PROM.begin();
+    E2PROM.get(0, cfg);
+
+    if (cfg.magic != CONFIG_MAGIC_KEY) {
+        ESP_LOGE(TAG, "Magic Key no coincide. EEPROM no inicializada.");
+        return false;
+    }
+
+    if (cfg.version != CONFIG_VERSION) {
+        ESP_LOGW(TAG, "Version incompatible (EEPROM: %d, FW: %d). Re-inicializando.",
+                 cfg.version, CONFIG_VERSION);
+        return false;
+    }
+
+    if (!verifyConfigCRC(cfg)) {
+        ESP_LOGE(TAG, "CRC invalido. Datos EEPROM corruptos.");
+        return false;
+    }
+
+    ESP_LOGI(TAG, "Configuracion EEPROM validada (v%d, CRC ok).", cfg.version);
+    return true;
+}
+
+ConfigSource loadSystemConfig(SDManager* sdManager, EEPROMSystemConfig& config, const EEPROMSystemConfig& defaultConfig) {
+    E2PROM.begin();
+
+    bool loadedFromSD = false;
+    if (sdManager->begin() == ESP_OK) {
+        if (sdManager->exists(PARAM_FILE)) {
+            ESP_LOGI(TAG, "[SD] Archivo de configuracion encontrado. Cargando...");
+            CSVSystemConfig configRaw;
+
+            if (!SDgetSystemConfig(sdManager, configRaw)) {
+                ESP_LOGE(TAG, "[SD] Faltan parametros en el CSV. Ignorando SD.");
+                logErrorToSD(sdManager, "Missing parameters in CSV");
+            } else if (!validateCSVConfig(configRaw)) {
+                ESP_LOGE(TAG, "[SD] Configuracion CSV invalida. Ignorando SD.");
+                logErrorToSD(sdManager, "Invalid CSV configuration values");
+            } else {
+                EEPROMSystemConfig configFromSD = rawToSystemConfig(configRaw);
+                E2PROM.put(0, configFromSD);
+                config = configFromSD;
+                loadedFromSD = true;
+                ESP_LOGI(TAG, "[SD -> EEPROM] Configuracion guardada en EEPROM exitosamente.");
+            }
+        } else {
+            ESP_LOGW(TAG, "[SD] Advertencia: La tarjeta SD esta montada pero no contiene %s", PARAM_FILE);
+            logErrorToSD(sdManager, "Config file not found: " PARAM_FILE);
+        }
+    } else {
+        ESP_LOGW(TAG, "[SD] Tarjeta SD no detectada o fallo al montar.");
+    }
+
+    if (!loadedFromSD) {
+        ESP_LOGI(TAG, "[EEPROM] Intentando cargar configuracion desde EEPROM...");
+
+        if (!loadConfigurationFromEEPROM(config)) {
+            ESP_LOGE(TAG, "[CRITICO] Fallo de SD y EEPROM invalida. Cargando valores por defecto (FLASH)...");
+            logErrorToSD(sdManager, "EEPROM configuration invalid, loading defaults");
+            config = defaultConfig;
+            size_t dataLen = offsetof(EEPROMSystemConfig, crc);
+            config.crc = calculateCRC16(reinterpret_cast<const uint8_t*>(&config), dataLen);
+            E2PROM.put(0, config);
+        } else {
+            return CONFIG_FROM_EEPROM;
+        }
+    }
+
+    if (sdManager->isReady()) {
+        sdManager->end();
+    }
+
+    return loadedFromSD ? CONFIG_FROM_SD : CONFIG_FROM_DEFAULT;
 }
