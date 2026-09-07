@@ -118,98 +118,99 @@ bool ModbusTcpBridge::getModbusTcpBuffer(EthernetClient& client, size_t maxBuffe
  * @brief Handles the lifecycle of a connected Modbus TCP client request.
  * Parses the frame, validates it, forwards to RTU, and sends back responses/exceptions.
  */
-void ModbusTcpBridge::handleClient(EthernetClient& client) { // funcion no bloqueante
+void ModbusTcpBridge::handleClient(EthernetClient& client) {
 
-    if (!client.available()) {
-        return; 
-    }
+    _currentClient = client;
 
-    memset(_modbusTcpBuffer, 0, SIZE_MB_TCP_FRAME);
+    while (client.connected()) {
 
-    /*
-    // version basica de obtencion de datos
-    int index = 0; // Todo muy basica, 
-    while (client.available() && index < SIZE_MB_TCP_FRAME) {
-        _modbusTcpBuffer[index++] = client.read();
-        delayMicroseconds(100);
-    }
-   */
-    
-    if(!getModbusTcpBuffer(client, SIZE_MB_TCP_FRAME, _modbusTcpBuffer)){
-        client.stop();
-        return; // de momento machacamos no devolvemos nada
-    }
-
-    // S1: Validate minimum frame length (MBAP 7 bytes + UnitID 1 + FC 1 + Address 2 + Quantity 2 = 12 min)
-    uint16_t frameLength = 6 + (((uint16_t)_modbusTcpBuffer[4] << 8) | _modbusTcpBuffer[5]);
-    if (frameLength < 12) {
-        ESP_LOGE(TAG, "Frame too short: %d bytes (minimum 12). Discarding.", frameLength);
-        client.stop();
-        return;
-    }
-
-    modbusStruct mbData;
-            
-    // 1. Validate and parse the TCP buffer. Send immediate exception if Function Code is unsupported.
-    if (!parseTCPBufferToStruct(_modbusTcpBuffer, &mbData)) {
-        uint8_t fCode = _modbusTcpBuffer[7];
-        if (fCode != 0) { // Avoid noise
-            mbData.transactionID = (_modbusTcpBuffer[0] << 8) | _modbusTcpBuffer[1];
-            mbData.slaveID = _modbusTcpBuffer[6];
-            mbData.functionCode = fCode;
-            sendTCPException(client, mbData, 0x01); // 0x01 = Illegal Function
+        if (!client.available()) {
+            delay(1);
+            continue; 
         }
-        //continue;
-        return; 
-    }
-    ESP_LOGI(TAG, "Valid Modbus TCP command received"); 
 
-    // 2. Execute request callback if registered
-    if(_tcpReqCallback){
-        _tcpReqCallback(mbData); 
-    }
+        memset(_modbusTcpBuffer, 0, SIZE_MB_TCP_FRAME);
 
-    // Check if the RTU client backend is available
-    if(_mbClient == nullptr){
-        sendTCPException(client, mbData, 0x0A); // Gateway Path Unavailable 
-        return; 
-    }
-    // Thread-safe block to protect the shared physical HW of the client bus (RS485)
-    _tcpTransferActive = true;
-    if (!_lock->lock(5000)) {
-        ESP_LOGE(TAG, "Failed to acquire RTU lock");
-        _tcpTransferActive = false;
-        sendTCPException(client, mbData, 0x0B); // Gateway Target Device Failed to Respond
-        return;
-    }
-    
-    delay(_interFrameDelay);
-    bool success = processCommand(mbData);
-    delay(_interFrameDelay);
+        if(!getModbusTcpBuffer(client, SIZE_MB_TCP_FRAME, _modbusTcpBuffer)){
+            client.stop();
+            return;
+        }
 
-    // 3. Handle response routing or exception mapping based on RTU results
-    if (success) {
-        ESP_LOGI(TAG, "Command processed successfully. Sending TCP response.");
-        sendTCPResponse(client, mbData);
-    } else {
-        int errorCode = _mbClient->lastErrorCode(); 
-        uint8_t exceptionCode = SLAVE_DEVICE_FAILURE; // Default: Slave Device Failure
+        // S1: Validate minimum frame length (MBAP 7 bytes + UnitID 1 + FC 1 + Address 2 + Quantity 2 = 12 min)
+        uint16_t frameLength = 6 + (((uint16_t)_modbusTcpBuffer[4] << 8) | _modbusTcpBuffer[5]);
+        if (frameLength < 12) {
+            ESP_LOGE(TAG, "Frame too short: %d bytes (minimum 12). Discarding.", frameLength);
+            client.stop();
+            return;
+        }
 
-        ESP_LOGE(TAG, "RTU operation failed: %d, Text: %s", errorCode, _mbClient->lastError());
+        modbusStruct mbData;
+                
+        // 1. Validate and parse the TCP buffer. Send immediate exception if Function Code is unsupported.
+        if (!parseTCPBufferToStruct(_modbusTcpBuffer, &mbData)) {
+            uint8_t fCode = _modbusTcpBuffer[7];
+            if (fCode != 0) { // Avoid noise
+                mbData.transactionID = (_modbusTcpBuffer[0] << 8) | _modbusTcpBuffer[1];
+                mbData.slaveID = _modbusTcpBuffer[6];
+                mbData.functionCode = fCode;
+                sendTCPException(mbData, 0x01); // 0x01 = Illegal Function
+            }
+            continue; 
+        }
+        ESP_LOGI(TAG, "Valid Modbus TCP command received"); 
 
-        // Map RTU/System errors to standard Modbus TCP exception codes
-        if (errorCode == ETIMEDOUT) { 
-            exceptionCode = 0x0B; // Gateway Target Device Failed to Respond
-        } else if (errorCode == EINVAL) {
-            exceptionCode = ILLEGAL_DATA_VALUE; // Illegal Data Value
-        } else if (errorCode == CODE_ILLEGAL_ADDRES){ 
-            exceptionCode = 0x02; // Illegal Data Address
+        // 2. Execute request callback if registered
+        if(_tcpReqCallback){
+            _tcpReqCallback(mbData); 
+        }
+
+        // Check if the RTU client backend is available
+        if(_mbClient == nullptr){
+            sendTCPException(mbData, 0x0A); // Gateway Path Unavailable 
+            continue; 
+        }
+        // Thread-safe block to protect the shared physical HW of the client bus (RS485)
+        _tcpTransferActive = true;
+        if (!_lock->lock(5000)) {
+            ESP_LOGE(TAG, "Failed to acquire RTU lock");
+            _tcpTransferActive = false;
+            sendTCPException(mbData, 0x0B); // Gateway Target Device Failed to Respond
+            continue;
         }
         
-        sendTCPException(client, mbData, exceptionCode);
-    }     
-    _lock->unlock();
-    _tcpTransferActive = false;
+        // Inter-frame delay: solo aplica para RTU (bus RS485), no para slave interno
+        if (mbData.slaveID != _internalSlaveId) {
+            delay(_interFrameDelay);
+        }
+        bool success = processCommand(mbData);
+        if (mbData.slaveID != _internalSlaveId) {
+            delay(_interFrameDelay);
+        }
+
+        // 3. Handle response routing or exception mapping based on RTU results
+        if (success) {
+            ESP_LOGI(TAG, "Command processed successfully. Sending TCP response.");
+            sendTCPResponse(mbData);
+        } else {
+            int errorCode = _mbClient->lastErrorCode(); 
+            uint8_t exceptionCode = SLAVE_DEVICE_FAILURE; // Default: Slave Device Failure
+
+            ESP_LOGE(TAG, "RTU operation failed: %d, Text: %s", errorCode, _mbClient->lastError());
+
+            // Map RTU/System errors to standard Modbus TCP exception codes
+            if (errorCode == ETIMEDOUT) { 
+                exceptionCode = 0x0B; // Gateway Target Device Failed to Respond
+            } else if (errorCode == EINVAL) {
+                exceptionCode = ILLEGAL_DATA_VALUE; // Illegal Data Value
+            } else if (errorCode == CODE_ILLEGAL_ADDRES){ 
+                exceptionCode = 0x02; // Illegal Data Address
+            }
+            
+            sendTCPException(mbData, exceptionCode);
+        }     
+        _lock->unlock();
+        _tcpTransferActive = false;
+    }
 }
 
 /**
@@ -303,96 +304,91 @@ bool ModbusTcpBridge::processCommand(const modbusStruct& mbData) {
 /**
  * @brief Constructs and sends a standard Modbus TCP response frame back to the client.
  */
-void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusStruct& req) {
+void ModbusTcpBridge::sendTCPResponse(const modbusStruct& req) {
 
-    // Write commands (FC 05, 06, 15, 16) return an echo response
+    // --- Write commands (FC 05, 06, 0F, 10): echo response ---
     if (req.functionCode == 0x05 || req.functionCode == 0x06 || req.functionCode == 0x0F || req.functionCode == 0x10) { 
         uint16_t tcpLength = 6; // Unit ID (1) + FC (1) + Address (2) + Value/Quant (2)
 
-        // 1. Send MBAP Header
-        client.write((uint8_t)(req.transactionID >> 8));
-        client.write((uint8_t)(req.transactionID & 0xFF));
-        client.write((uint8_t)0); // Protocol ID high
-        client.write((uint8_t)0); // Protocol ID low
-        client.write(highByte(tcpLength));
-        client.write(lowByte(tcpLength));
-        client.write(req.slaveID);
+        // MBAP header (7) + PDU echo (4) = 11 bytes... pero address(2) + value(2) = 4, total 12
+        uint8_t buffer[12];
+        buffer[0] = req.transactionID >> 8;
+        buffer[1] = req.transactionID & 0xFF;
+        buffer[2] = 0; // Protocol ID high
+        buffer[3] = 0; // Protocol ID low
+        buffer[4] = tcpLength >> 8;
+        buffer[5] = tcpLength & 0xFF;
+        buffer[6] = req.slaveID;
+        buffer[7] = req.functionCode;
+        buffer[8] = req.address >> 8;
+        buffer[9] = req.address & 0xFF;
+        buffer[10] = req.quantity_value >> 8;
+        buffer[11] = req.quantity_value & 0xFF;
 
-        // 2. Send PDU Echo
-        client.write(req.functionCode);
-        client.write(highByte(req.address));
-        client.write(lowByte(req.address));
-        client.write(highByte(req.quantity_value)); 
-        client.write(lowByte(req.quantity_value));
-        
+        _currentClient.write(buffer, 12);
         return; 
     }
 
-    // --- Processing Read Commands (FC 01, 02, 03, 04) ---
+    // --- Read commands (FC 01, 02, 03, 04) ---
     uint8_t byteCount = 0; 
-    
-    if (req.functionCode == 0x01 || req.functionCode == 0x02) { // Coils/Discrete Inputs
+    if (req.functionCode == 0x01 || req.functionCode == 0x02) {
         byteCount = (req.quantity_value + 7) / 8;
-    } else { // Holding/Input Registers
+    } else {
         byteCount = req.quantity_value * 2; 
     }
 
     uint16_t tcpLength = 3 + byteCount; // UnitID (1) + FC (1) + ByteCount (1) + Data(N)
 
-    // Send MBAP Header
-    client.write((uint8_t)(req.transactionID >> 8));
-    client.write((uint8_t)(req.transactionID & 0xFF));
-    client.write((uint8_t)0);
-    client.write((uint8_t)0);
-    client.write(highByte(tcpLength));
-    client.write(lowByte(tcpLength));
-    client.write(req.slaveID);
-    
-    // Send PDU Header
-    client.write(req.functionCode);
-    client.write(byteCount);
+    // Paso 1: Leer todos los datos del RTU a un buffer temporal
+    uint8_t pduData[256];
+    memset(pduData, 0, sizeof(pduData));
 
-    // Stream payload data from RTU buffer to TCP stream
     if (req.functionCode == 0x01 || req.functionCode == 0x02) { 
+        // Coils/Discrete Inputs: un bit por read()
         int coilsRead = 0;
         for (int i = 0; i < byteCount; i++) {
             uint8_t currentByte = 0;
             for (int bit = 0; bit < 8; bit++) {
                 if (coilsRead < req.quantity_value) {
                     long rawValue = _mbClient->read();
-                    if (rawValue != -1) { // Comprobación de seguridad contra fin de buffer o error
-                        uint8_t bitValue = (uint8_t)rawValue;
-                        if (bitValue == 1) {
-                            currentByte |= (1 << bit);
-                        }
+                    if (rawValue != -1 && (uint8_t)rawValue == 1) {
+                        currentByte |= (1 << bit);
                     }
                     coilsRead++;
-                } else {
-                    break; 
                 }
             }
-            client.write(currentByte);
+            pduData[i] = currentByte;
         }
     } else { 
+        // Holding/Input Registers: 16 bits por read()
         for (int i = 0; i < req.quantity_value; i++) {
             long rawValue = _mbClient->read();
-            uint16_t valorRegistro = 0;
+            uint16_t valorRegistro = (rawValue != -1) ? (uint16_t)rawValue : 0;
 
-            if (rawValue != -1) {
-                valorRegistro = (uint16_t)rawValue;
-            } else {
-                ESP_LOGE(TAG, "Read buffer underflow at register index: %d", i);
-            }
-
-            // Trigger interceptor callback if registered (allows on-the-fly modifications)
             if (_interceptor) { 
                 _interceptor(req, i, valorRegistro);
             }
 
-            client.write(highByte(valorRegistro));
-            client.write(lowByte(valorRegistro));
+            pduData[i * 2]     = valorRegistro >> 8;
+            pduData[i * 2 + 1] = valorRegistro & 0xFF;
         }
     }
+
+    // Paso 2: Construir el frame completo en un buffer y enviar de golpe
+    // MBAP header (7) + FC (1) + ByteCount (1) + Data (N)
+    uint8_t frame[9 + 256];
+    frame[0] = req.transactionID >> 8;
+    frame[1] = req.transactionID & 0xFF;
+    frame[2] = 0; // Protocol ID high
+    frame[3] = 0; // Protocol ID low
+    frame[4] = tcpLength >> 8;
+    frame[5] = tcpLength & 0xFF;
+    frame[6] = req.slaveID;
+    frame[7] = req.functionCode;
+    frame[8] = byteCount;
+    memcpy(&frame[9], pduData, byteCount);
+
+    _currentClient.write(frame, 9 + byteCount);
 }
 
 
@@ -400,22 +396,23 @@ void ModbusTcpBridge::sendTCPResponse(EthernetClient& client, const modbusStruct
  * @brief Sends a Modbus TCP Exception response.
  * @param exceptionCode Standard Modbus exception identifier.
  */
-void ModbusTcpBridge::sendTCPException(EthernetClient& client, const modbusStruct& req, uint8_t exceptionCode) {
+void ModbusTcpBridge::sendTCPException(const modbusStruct& req, uint8_t exceptionCode) {
     uint16_t tcpLength = 3; // Unit ID (1) + Exception FC (1) + Exception Code (1)
 
-    // 1. Send MBAP Header
-    client.write((uint8_t)(req.transactionID >> 8));
-    client.write((uint8_t)(req.transactionID & 0xFF));
-    client.write((uint8_t)0);
-    client.write((uint8_t)0);
-    client.write(highByte(tcpLength));
-    client.write(lowByte(tcpLength));
-    client.write(req.slaveID);
+    // Buffer completo: MBAP header (7) + Exception PDU (2) = 9 bytes
+    uint8_t buffer[9];
+    buffer[0] = req.transactionID >> 8;
+    buffer[1] = req.transactionID & 0xFF;
+    buffer[2] = 0; // Protocol ID high
+    buffer[3] = 0; // Protocol ID low
+    buffer[4] = tcpLength >> 8;
+    buffer[5] = tcpLength & 0xFF;
+    buffer[6] = req.slaveID;
+    buffer[7] = req.functionCode | 0x80;
+    buffer[8] = exceptionCode;
 
-    // 2. Send Exception PDU (Function Code | 0x80)
-    client.write((uint8_t)(req.functionCode | 0x80)); 
-    client.write(exceptionCode);
-    
+    _currentClient.write(buffer, 9);
+
     ESP_LOGW(TAG, "TCP Exception sent. FC: 0x%02X, Code: 0x%02X", req.functionCode, exceptionCode);
 }
 

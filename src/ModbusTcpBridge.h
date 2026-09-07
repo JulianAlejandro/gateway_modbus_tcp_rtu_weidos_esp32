@@ -79,7 +79,8 @@ public:
 
     void setModbusClient(IModbusClient* mbClient);
     void setThreadLock(IThreadLock* lock);
-    void setInterFrameDelay(uint32_t ms);  
+    void setInterFrameDelay(uint32_t ms);
+    void setInternalSlaveId(uint8_t id) { _internalSlaveId = id; }
 
     /**
      * @brief Maps Modbus Function Codes to client standard data type constants.
@@ -91,6 +92,7 @@ public:
 private:   
     uint16_t _port;
     WeidosEthernetServer* _ethernetServer = nullptr;  
+    EthernetClient _currentClient;
     byte _modbusTcpBuffer[SIZE_MB_TCP_FRAME];
     IModbusClient* _mbClient;
 
@@ -101,13 +103,14 @@ private:
     ModbusInterceptorCallback _interceptor = nullptr;
     ModbusTCPReqCallback _tcpReqCallback = nullptr; 
     uint32_t _interFrameDelay = 0;
+    uint8_t _internalSlaveId = 10;
 
     void handleClient(EthernetClient& client);
     
     bool getModbusTcpBuffer(EthernetClient& client, size_t maxBufferSize, byte* out_buffer);
     bool processCommand(const modbusStruct& mbData);
-    void sendTCPResponse(EthernetClient& client, const modbusStruct& req);
-    void sendTCPException(EthernetClient& client, const modbusStruct& req, uint8_t exceptionCode);
+    void sendTCPResponse(const modbusStruct& req);
+    void sendTCPException(const modbusStruct& req, uint8_t exceptionCode);
 };
 
 #endif

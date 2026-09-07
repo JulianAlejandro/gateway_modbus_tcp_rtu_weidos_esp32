@@ -156,6 +156,7 @@ void setup() {
     modbusTcpBridge.setThreadLock(&rtuThreadLock); 
     modbusTcpBridge.setInterceptor(checkTCPDataCallback);
     modbusTcpBridge.setTCPReqCallback(checkTCPReqCallback);
+    modbusTcpBridge.setInternalSlaveId(sysConfig.internal_slave_id);
     modbusTcpBridge.begin(sysConfig.modbusPort, sysConfig.mac, ip, dns, gateway, subnet);
 
     xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
@@ -247,3 +248,105 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
     } 
     return lecturaExitosa; 
 }
+
+/*
+
+#include <Arduino.h>
+
+#include "testModbusInternalClient.h"
+//#include "InternalModbusSlave.h"
+
+#include "ModbusTCPBridge.h"
+
+#include "SDManager.h"
+#include "systemConfig.h"
+
+static const char* TAG = "MAIN_APP"; 
+
+SDManager sdManager; 
+
+const EEPROMSystemConfig DEFAULT_SYS_CONFIG = {
+    CONFIG_MAGIC_KEY,
+    CONFIG_VERSION,
+    {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}, // MAC
+    {192, 168, 1, 150},                  // IP
+    {192, 168, 1, 1},                    // Gateway
+    {255, 255, 255, 0},                  // Subnet
+    {192, 168, 1, 1},                    // DNS
+    502,                                 // Modbus TCP Port
+    9600,                                // Baudrate
+    17, 22, 23,                          // TX, DE, RE Pins
+    SERIAL_8N2,                          // Serial Config
+    250,                                 // Inter-frame delay
+    5000,                                // Response Timeout
+    3,                                   // Attempts
+    10                                   // Internal Slave ID
+};
+
+EEPROMSystemConfig sysConfig = DEFAULT_SYS_CONFIG;  
+ 
+// --- INSTANCIAS GLOBALES ÚNICAS (Sin doble constructor) ---
+// Inicialmente arranca con el DummyLock interno por defecto
+TestModbusInternalClient internalClient; 
+
+ModbusTcpBridge modbusTcpBridge(&internalClient); 
+
+TaskHandle_t ModbusGatewayTaskHandle = NULL;
+
+
+void modbusGatewayTask(void * pvParameters) {
+    uint32_t loopCount = 0;
+    for(;;) {
+        modbusTcpBridge.process();
+
+        //if (++loopCount % 30000 == 0) {
+        //    UBaseType_t highWater = uxTaskGetStackHighWaterMark(NULL);
+        //    ESP_LOGI(TAG, "Gateway stack high water: %d bytes free", highWater * 4);
+        //}
+
+        vTaskDelay(pdMS_TO_TICKS(1)); 
+    }
+}
+
+void setup() {
+    Serial.begin(115200);
+    while(!Serial){}
+
+    ConfigSource configSource = loadSystemConfig(&sdManager, sysConfig, DEFAULT_SYS_CONFIG);
+    Serial.printf("Configuration loaded from: %s\r\n", 
+             configSource == CONFIG_FROM_SD ? "SD" : 
+             configSource == CONFIG_FROM_EEPROM ? "EEPROM" : "DEFAULT");
+    
+    printConfig(sysConfig);
+
+    IPAddress ip(sysConfig.ip);
+    IPAddress gateway(sysConfig.gateway);
+    IPAddress subnet(sysConfig.subnet);
+    IPAddress dns(sysConfig.dns);
+
+    // 2. Instanciar el Lock pasándole el Semáforo de FreeRTOS real
+    //rtuThreadLock = new FreeRtosModbusLock(xModbusRTUMutex); // TODO , no me gusta en memoria dinamica
+
+    RS485.setPins(RS485_TX, RS485_DE, RS485_RE);
+
+
+
+    // 3. Vincular dinámicamente el Lock y el Interceptor al objeto global estable
+    
+    modbusTcpBridge.setInternalSlaveId(sysConfig.internal_slave_id);
+    modbusTcpBridge.begin(sysConfig.modbusPort, sysConfig.mac, ip, dns, gateway, subnet);
+
+    xTaskCreatePinnedToCore(modbusGatewayTask, "ModbusGatewayTask", 4096, NULL, 3, &ModbusGatewayTaskHandle, 0);
+
+    //initOLED(); 
+    
+    Serial.println(); 
+    Serial.println("Gateway runing...");
+    delay(1000);
+}
+
+void loop() {
+    delay(100); 
+}
+
+*/
