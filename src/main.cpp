@@ -250,7 +250,111 @@ bool reqSlaveInternalClient(ModbusSlaveData* slave){
 }
 
 /*
+#include <SPI.h>
+#include <Ethernet.h>
+#include <ArduinoModbus.h>
+#include "ModbusTCPToRTUGateway.h"
 
+byte mac[] = { 0x02, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+IPAddress ip(192, 168, 58, 10);
+IPAddress myDns(192, 168, 58, 1);
+IPAddress gatewayIp(192, 168, 58, 1);
+IPAddress subnet(255, 255, 255, 0);
+
+class WeidosEthernetServer : public EthernetServer {
+public:
+    WeidosEthernetServer(uint16_t port) : EthernetServer(port) {}
+    void begin(uint16_t port = 0) override {
+        (void)port;
+        EthernetServer::begin(); 
+    }
+};
+
+WeidosEthernetServer ethServer(502);
+
+ModbusTCPToRTUGateway modbusGateway;
+
+const unsigned long logInterval = 5000;
+unsigned long lastLogTime = 0;
+
+void setup()
+{
+  Serial.begin(115200);
+  while (!Serial);
+
+  Ethernet.init(ETHERNET_CS); 
+  Ethernet.begin(mac, ip, myDns, gatewayIp, subnet);
+
+  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+    Serial.println("No se encontro el chip Ethernet!");
+    while (true) { delay(1); }
+  }
+
+  ethServer.begin(502);
+
+  if (!modbusGateway.begin(0xff)) {
+    Serial.println("Fallo al iniciar el servidor Modbus TCP!");
+    while (true);
+  }
+
+  if (!ModbusRTUClient.begin(9600, SERIAL_8N2)) {
+    Serial.println("Fallo al iniciar el cliente Modbus RTU!");
+    while (true);
+  }
+
+  ModbusRTUClient.setTimeout(0); 
+    
+
+  if (!modbusGateway.setClient(&ModbusRTUClient)) {
+    Serial.println("Fallo al configurar el cliente del gateway!");
+    while (true);
+  }
+
+  modbusGateway.configureCoils(0, 10);
+  modbusGateway.configureDiscreteInputs(0, 10);
+  modbusGateway.configureHoldingRegisters(0, 10);
+  modbusGateway.configureInputRegisters(0, 10);
+
+  Serial.println("ModbusTCP-to-RTU Gateway ONLINE.");
+  Serial.print("IP: ");
+  Serial.println(Ethernet.localIP());
+}
+
+void loop()
+{
+  EthernetClient client = ethServer.available();
+
+  if (client) {
+    modbusGateway.accept(client);
+
+    while (client.connected()) {
+      modbusGateway.poll();
+    }
+  }
+
+
+
+ //unsigned long currentTime = millis();
+ //if (currentTime - lastLogTime >= logInterval)
+ //{
+ //  Serial.println("--- GATEWAY STATUS ---");
+
+ //  long holding = modbusGateway.holdingRegisterRead(0);
+ //  long input = modbusGateway.inputRegisterRead(0);
+ //  int coil = modbusGateway.coilRead(0);
+
+ //  Serial.print("  Coil 0: "); Serial.println(coil);
+ //  Serial.print("  Holding Reg 0: "); Serial.println(holding);
+ //  Serial.print("  Input Reg 0: "); Serial.println(input);
+
+ //  Serial.println("----------------------\n");
+ //  lastLogTime = currentTime;
+ //}
+  
+}
+*/
+
+/*
 #include <Arduino.h>
 
 #include "testModbusInternalClient.h"
