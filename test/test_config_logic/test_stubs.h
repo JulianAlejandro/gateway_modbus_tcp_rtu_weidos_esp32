@@ -1,6 +1,10 @@
 #ifndef TEST_STUBS_H
 #define TEST_STUBS_H
 
+// When building natively, native_stubs/ headers provide everything.
+// Only define stubs for ESP32 (test_init) builds.
+#ifndef NATIVE_BUILD
+
 // Minimal Arduino stubs for native compilation of SystemConfig.cpp
 #ifndef ARDUINO_H
 #define ARDUINO_H
@@ -55,6 +59,19 @@ public:
 static EEPROMClass E2PROM;
 #endif
 
+// CSV_Parser stub (only needed if SystemConfig.cpp includes it)
+#ifndef CSV_PARSER_H
+#define CSV_PARSER_H
+class CSV_Parser {
+public:
+    CSV_Parser(const char* csv, const char* sep = ",", bool hasHeader = true, char quote = '"') {}
+    int getSelectedRows() { return 0; }
+    char** getColumnAsString(int col) { return nullptr; }
+};
+#endif
+
+#endif // !NATIVE_BUILD
+
 // RS485 pin constants
 #ifndef RS485_TX
 #define RS485_TX 17
@@ -88,17 +105,6 @@ static EEPROMClass E2PROM;
 #define SERIAL_6O2 0x7C
 #define SERIAL_7O2 0x84
 #define SERIAL_8O2 0x8C
-#endif
-
-// CSV_Parser stub (only needed if SystemConfig.cpp includes it)
-#ifndef CSV_PARSER_H
-#define CSV_PARSER_H
-class CSV_Parser {
-public:
-    CSV_Parser(const char* csv, const char* sep = ",", bool hasHeader = true, char quote = '"') {}
-    int getSelectedRows() { return 0; }
-    char** getColumnAsString(int col) { return nullptr; }
-};
 #endif
 
 #endif // TEST_STUBS_H

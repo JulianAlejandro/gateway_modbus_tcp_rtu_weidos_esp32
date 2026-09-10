@@ -5,11 +5,11 @@
 
 // Now include the source under test directly
 // This gives us access to all functions defined in SystemConfig.cpp
-#include "../../src/systemConfig.h"
+#include "systemConfig.h"
 
 // Include implementation to get function definitions
 // (SystemConfig.cpp will be compiled as part of this test file)
-#include "../../src/SystemConfig.cpp"
+#include "SystemConfig.cpp"
 
 // ============================================================
 // TEST: calculateCRC16
